@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ward Roster — Robina Transfer Unit</title>
+<style>
+:root {
+  --bg:#0d1117; --bg2:#161b22; --bg3:#1c2333; --bg4:#21262d;
+  --bdr:#30363d; --bdr2:#3d4450;
+  --txt:#e6edf3; --txt2:#8b949e; --txt3:#6e7681;
+  --acc:#58a6ff; --grn:#3fb950; --org:#d29922; --red:#f85149; --pur:#bc8cff; --teal:#39d353;
+  --cn:#f0883e; --rn:#79c0ff; --en:#56d364;
+  --r:6px; --r2:12px;
+}
+[data-theme="light"] {
+  --bg:#f6f8fa; --bg2:#ffffff; --bg3:#f0f2f5; --bg4:#e8ecf1;
+  --bdr:#d0d7de; --bdr2:#afb8c1;
+  --txt:#1f2328; --txt2:#656d76; --txt3:#9198a1;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--txt); min-height:100vh; font-size:13px; }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--bg2); }
+::-webkit-scrollbar-thumb { background:var(--bdr2); border-radius:3px; }
+
+/* LAYOUT */
+.app { display:grid; grid-template-rows:auto auto 1fr; min-height:100vh; }
+.hdr { background:var(--bg2); border-bottom:1px solid var(--bdr); padding:10px 16px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.hdr-left { display:flex; align-items:center; gap:12px; }
+.logo { font-size:14px; font-weight:700; color:var(--acc); letter-spacing:-.3px; }
+.subtitle { font-size:11px; color:var(--txt2); }
+.hdr-btns { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.tabs { background:var(--bg3); border-bottom:1px solid var(--bdr); padding:0 16px; display:flex; gap:0; }
+.tab { padding:10px 16px; cursor:pointer; color:var(--txt2); font-size:12px; font-weight:500; border-bottom:2px solid transparent; transition:.15s; white-space:nowrap; }
+.tab:hover { color:var(--txt); }
+.tab.active { color:var(--acc); border-bottom-color:var(--acc); }
+.main { padding:12px 16px; overflow:auto; }
+
+/* BUTTONS */
+.btn { padding:6px 12px; border:1px solid var(--bdr); background:var(--bg3); color:var(--txt); border-radius:var(--r); cursor:pointer; font-size:12px; font-weight:500; transition:.15s; display:inline-flex; align-items:center; gap:5px; }
+.btn:hover { background:var(--bg4); border-color:var(--bdr2); }
+.btn-pri { background:var(--acc); color:#0d1117; border-color:var(--acc); font-weight:600; }
+.btn-pri:hover { opacity:.9; }
+.btn-grn { background:var(--grn); color:#0d1117; border-color:var(--grn); font-weight:600; }
+.btn-grn:hover { opacity:.9; }
+.btn-org { background:var(--org); color:#0d1117; border-color:var(--org); }
+.btn-red { background:var(--red); color:#fff; border-color:var(--red); }
+.btn-sm { padding:4px 8px; font-size:11px; }
+.btn-ai { background:linear-gradient(135deg,#7c3aed,#2563eb); color:#fff; border:none; }
+.btn-ai:hover { opacity:.9; }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+
+/* CARDS */
+.card { background:var(--bg2); border:1px solid var(--bdr); border-radius:var(--r2); padding:14px; margin-bottom:12px; }
+.card-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.card-title { font-size:13px; font-weight:600; color:var(--txt); }
+
+/* ROSTER GRID */
+.grid-wrap { overflow:auto; border:1px solid var(--bdr); border-radius:var(--r2); background:var(--bg2); }
+table.roster { border-collapse:collapse; min-width:100%; font-size:11.5px; }
+table.roster th, table.roster td { border:1px solid var(--bdr); padding:0; }
+.col-shift { width:110px; min-width:100px; background:var(--bg3); position:sticky; left:0; z-index:2; }
+.shift-hdr { padding:5px 7px; }
+.shift-name { font-weight:700; font-size:11px; color:var(--txt); }
+.shift-time { font-size:10px; color:var(--txt2); }
+.shift-slot { font-size:10px; color:var(--txt3); margin-top:1px; }
+.col-day-hdr { text-align:center; padding:4px 2px; background:var(--bg3); position:sticky; top:0; z-index:3; min-width:82px; }
+.col-day-hdr.weekend { background:#1a1f2e; color:var(--org); }
+.day-name { font-weight:700; font-size:11px; }
+.day-date { font-size:10px; color:var(--txt2); }
+.day-fn { font-size:9px; color:var(--txt3); }
+.cell { padding:3px 4px; vertical-align:top; min-height:36px; min-width:82px; cursor:pointer; position:relative; transition:.1s; }
+.cell:hover { background:rgba(88,166,255,.07); }
+.cell.weekend { background:rgba(255,255,255,.02); }
+.cell.today { background:rgba(88,166,255,.06); }
+.cell-staff { display:flex; flex-wrap:wrap; gap:2px; }
+.staff-tag { display:inline-flex; align-items:center; gap:2px; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:500; cursor:pointer; border:1px solid transparent; }
+.staff-tag.cn { background:rgba(240,136,62,.15); color:var(--cn); border-color:rgba(240,136,62,.3); }
+.staff-tag.rn { background:rgba(121,192,255,.12); color:var(--rn); border-color:rgba(121,192,255,.25); }
+.staff-tag.en { background:rgba(86,211,100,.12); color:var(--en); border-color:rgba(86,211,100,.25); }
+.staff-tag:hover { opacity:.7; }
+.cell-empty { color:var(--txt3); font-size:10px; padding:8px 4px; text-align:center; }
+.cell-leave { background:rgba(248,81,73,.08); }
+.cell-leave::after { content:'LEAVE'; position:absolute; top:2px; right:2px; font-size:9px; color:var(--red); font-weight:700; opacity:.6; }
+
+/* STAFF GRID */
+.staff-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; }
+.staff-card { background:var(--bg2); border:1px solid var(--bdr); border-radius:var(--r2); padding:12px; }
+.staff-card-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.staff-name-input { background:transparent; border:none; color:var(--txt); font-size:13px; font-weight:600; outline:none; width:100%; }
+.staff-name-input::placeholder { color:var(--txt3); }
+.role-badge { padding:2px 8px; border-radius:20px; font-size:10px; font-weight:700; }
+.role-badge.CN { background:rgba(240,136,62,.2); color:var(--cn); }
+.role-badge.RN { background:rgba(121,192,255,.15); color:var(--rn); }
+.role-badge.EN { background:rgba(86,211,100,.15); color:var(--en); }
+.staff-fields { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; }
+.field-group { display:flex; flex-direction:column; gap:3px; }
+.field-label { font-size:10px; color:var(--txt2); }
+.field-input { background:var(--bg3); border:1px solid var(--bdr); color:var(--txt); border-radius:4px; padding:4px 8px; font-size:12px; width:100%; }
+.field-input:focus { outline:none; border-color:var(--acc); }
+.staff-flags { display:flex; flex-wrap:wrap; gap:6px; }
+.flag-cb { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--txt2); cursor:pointer; }
+.flag-cb input { cursor:pointer; accent-color:var(--acc); }
+.staff-del { width:24px; height:24px; border:1px solid var(--bdr); background:transparent; color:var(--txt3); border-radius:4px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; }
+.staff-del:hover { background:var(--red); color:#fff; border-color:var(--red); }
+
+/* FTE BARS */
+.fte-list { display:flex; flex-direction:column; gap:6px; }
+.fte-row { display:grid; grid-template-columns:130px 50px 1fr 60px; align-items:center; gap:8px; }
+.fte-name { font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fte-hrs { font-size:11px; color:var(--txt2); text-align:right; }
+.fte-bar-wrap { height:8px; background:var(--bg4); border-radius:4px; overflow:hidden; }
+.fte-bar { height:100%; border-radius:4px; transition:.3s; }
+.fte-bar.ok { background:var(--grn); }
+.fte-bar.close { background:var(--org); }
+.fte-bar.over { background:var(--red); }
+.fte-bar.low { background:var(--acc); }
+.fte-pct { font-size:10px; color:var(--txt2); text-align:right; white-space:nowrap; }
+
+/* LEAVE MANAGER */
+.leave-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px; }
+.leave-card { background:var(--bg3); border:1px solid var(--bdr); border-radius:var(--r); padding:10px; }
+.leave-staff { font-weight:600; font-size:12px; margin-bottom:6px; }
+.leave-days { display:flex; flex-wrap:wrap; gap:4px; }
+.leave-day-btn { padding:3px 7px; border:1px solid var(--bdr); background:var(--bg4); color:var(--txt2); border-radius:4px; cursor:pointer; font-size:10px; font-weight:500; transition:.1s; }
+.leave-day-btn:hover { border-color:var(--bdr2); }
+.leave-day-btn.leave { background:rgba(248,81,73,.2); color:var(--red); border-color:rgba(248,81,73,.4); }
+.leave-day-btn.red { background:rgba(209,145,34,.2); color:var(--org); border-color:rgba(209,145,34,.4); }
+
+/* LOG */
+.log-box { background:var(--bg3); border:1px solid var(--bdr); border-radius:var(--r); padding:10px; font-size:11px; font-family:monospace; max-height:400px; overflow-y:auto; color:var(--txt2); line-height:1.6; white-space:pre-wrap; }
+.log-box .log-ok { color:var(--grn); }
+.log-box .log-warn { color:var(--org); }
+.log-box .log-err { color:var(--red); }
+.log-box .log-hdr { color:var(--acc); font-weight:bold; }
+.log-box .log-ai { color:var(--pur); }
+
+/* MODAL */
+.overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:100; align-items:center; justify-content:center; }
+.overlay.show { display:flex; }
+.modal { background:var(--bg2); border:1px solid var(--bdr2); border-radius:var(--r2); padding:20px; width:420px; max-width:94vw; max-height:80vh; overflow-y:auto; }
+.modal-title { font-size:14px; font-weight:700; margin-bottom:14px; }
+.modal-body { display:flex; flex-direction:column; gap:10px; }
+.modal-footer { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+
+/* REPORT */
+.report-section { margin-bottom:16px; }
+.report-title { font-size:12px; font-weight:700; color:var(--acc); margin-bottom:8px; text-transform:uppercase; letter-spacing:.5px; }
+.report-table { width:100%; border-collapse:collapse; font-size:11px; }
+.report-table th { background:var(--bg3); border:1px solid var(--bdr); padding:4px 8px; text-align:left; color:var(--txt2); font-weight:600; }
+.report-table td { border:1px solid var(--bdr); padding:4px 8px; }
+.report-table tr:hover td { background:rgba(88,166,255,.04); }
+.badge { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:600; }
+.badge-ok { background:rgba(63,185,80,.2); color:var(--grn); }
+.badge-warn { background:rgba(210,153,34,.2); color:var(--org); }
+.badge-err { background:rgba(248,81,73,.2); color:var(--red); }
+
+/* AI PANEL */
+.ai-panel { background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(37,99,235,.08)); border:1px solid rgba(124,58,237,.3); border-radius:var(--r2); padding:14px; margin-bottom:12px; }
+.ai-title { font-size:13px; font-weight:700; color:var(--pur); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+.ai-status { font-size:11px; color:var(--txt2); margin-bottom:10px; }
+.ai-progress { height:4px; background:var(--bg4); border-radius:2px; overflow:hidden; margin-top:8px; display:none; }
+.ai-progress-bar { height:100%; background:linear-gradient(90deg,#7c3aed,#2563eb); border-radius:2px; animation:pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+/* SELECT CELL MODAL */
+.staff-pick { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.staff-pick-btn { padding:5px 10px; border:1px solid var(--bdr); background:var(--bg3); color:var(--txt); border-radius:var(--r); cursor:pointer; font-size:11px; transition:.1s; }
+.staff-pick-btn:hover { background:var(--bg4); }
+.staff-pick-btn.cn { border-color:rgba(240,136,62,.5); color:var(--cn); }
+.staff-pick-btn.rn { border-color:rgba(121,192,255,.4); color:var(--rn); }
+.staff-pick-btn.en { border-color:rgba(86,211,100,.4); color:var(--en); }
+.staff-pick-btn.selected { background:var(--acc); color:#0d1117; border-color:var(--acc); }
+.staff-pick-btn.unavail { opacity:.35; cursor:not-allowed; text-decoration:line-through; }
+select.field-input option { background:var(--bg2); }
+
+/* UTIL */
+.flex { display:flex; }
+.flex-col { display:flex; flex-direction:column; }
+.gap-2 { gap:8px; }
+.gap-1 { gap:4px; }
+.items-center { align-items:center; }
+.justify-between { justify-content:space-between; }
+.mb-1 { margin-bottom:8px; }
+.mb-2 { margin-bottom:14px; }
+.text-sm { font-size:11px; }
+.text-muted { color:var(--txt2); }
+.text-acc { color:var(--acc); }
+.w-full { width:100%; }
+hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
+.info-box { background:var(--bg3); border:1px solid var(--bdr); border-radius:var(--r); padding:8px 12px; font-size:11px; color:var(--txt2); }
+.section-label { font-size:11px; font-weight:600; color:var(--txt2); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+.tag { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:600; background:var(--bg4); color:var(--txt2); border:1px solid var(--bdr); }
+.spinner { display:inline-block; width:12px; height:12px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  20%,60%{transform:translateX(-8px)}
+  40%,80%{transform:translateX(8px)}
+}
+
+@keyframes spin { to{transform:rotate(360deg)} }
+@media print {
+  .hdr-btns,.tabs,.no-print { display:none!important; }
+  .main { padding:0; }
+  .grid-wrap { border:none; }
+  body { background:#fff; color:#000; }
+}
+
+/* PIN LOCK */
+.pin-overlay { position:fixed; inset:0; background:var(--bg); z-index:9999; display:flex; align-items:center; justify-content:center; }
+.pin-box { background:var(--bg2); border:1px solid var(--bdr2); border-radius:var(--r2); padding:32px; width:320px; text-align:center; }
+.pin-title { font-size:18px; font-weight:700; color:var(--acc); margin-bottom:6px; }
+.pin-sub { font-size:12px; color:var(--txt2); margin-bottom:24px; }
+.pin-dots { display:flex; justify-content:center; gap:12px; margin-bottom:24px; }
+.pin-dot { width:14px; height:14px; border-radius:50%; border:2px solid var(--bdr2); background:transparent; transition:.15s; }
+.pin-dot.filled { background:var(--acc); border-color:var(--acc); }
+.pin-pad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+.pin-btn { padding:14px; border:1px solid var(--bdr); background:var(--bg3); color:var(--txt); border-radius:var(--r); cursor:pointer; font-size:16px; font-weight:600; transition:.15s; }
+.pin-btn:hover { background:var(--bg4); border-color:var(--bdr2); }
+.pin-btn:active { transform:scale(.95); }
+.pin-clear { grid-column:1; font-size:12px; color:var(--txt2); }
+.pin-zero { grid-column:2; }
+.pin-error { font-size:11px; color:var(--red); height:16px; margin-top:4px; }
+</style>
+</head>
+<body>
+
+<!-- PIN LOCK OVERLAY -->
+<div class="pin-overlay" id="pinOverlay">
+  <div class="pin-box">
+    <div class="pin-title">🏥 Ward Roster</div>
+    <div class="pin-sub">Robina Transfer Unit — Enter PIN to access</div>
+    <div class="pin-dots" id="pinDots">
+      <div class="pin-dot" id="dot0"></div>
+      <div class="pin-dot" id="dot1"></div>
+      <div class="pin-dot" id="dot2"></div>
+      <div class="pin-dot" id="dot3"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="pin-btn" onclick="pinPress('1')">1</button>
+      <button class="pin-btn" onclick="pinPress('2')">2</button>
+      <button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button>
+      <button class="pin-btn" onclick="pinPress('5')">5</button>
+      <button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button>
+      <button class="pin-btn" onclick="pinPress('8')">8</button>
+      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn pin-clear" onclick="pinClear()">⌫</button>
+      <button class="pin-btn pin-zero" onclick="pinPress('0')">0</button>
+      <div></div>
+    </div>
+    <div class="pin-error" id="pinError"></div>
+  </div>
+</div>
+<div class="app">
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-left">
+    <div>
+      <div class="logo">🏥 Robina Transfer Unit</div>
+      <div class="subtitle">Ward Roster Manager v8</div>
+    </div>
+  </div>
+  <div class="hdr-btns">
+    <span id="fnLabel" class="tag">Loading...</span>
+    <button class="btn btn-sm" id="btnPrevFn">◀ FN</button>
+    <button class="btn btn-sm" id="btnNextFn">FN ▶</button>
+    <button class="btn btn-ai" id="btnAIFill">✨ AI Autofill</button>
+    <button class="btn btn-sm" id="btnFillLegacy">⚡ Quick Fill</button>
+    <button class="btn btn-sm" id="btnClear">🗑 Clear</button>
+    <button class="btn btn-sm" id="btnExport">📥 Export</button>
+    <button class="btn btn-sm" id="btnImport">📤 Import</button>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+    <button class="btn btn-sm" id="btnPrint">🖨 Print</button>
+    <button class="btn btn-sm" id="btnTheme">🌙</button>
+  </div>
+</header>
+
+<!-- TABS -->
+<nav class="tabs">
+  <div class="tab active" data-tab="roster">📋 Roster Grid</div>
+  <div class="tab" data-tab="staff">👤 Staff</div>
+  <div class="tab" data-tab="leave">📅 Leave & RED</div>
+  <div class="tab" data-tab="fte">📊 FTE Compliance</div>
+  <div class="tab" data-tab="report">📈 Report</div>
+  <div class="tab" data-tab="log">🔍 Log</div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- ===== ROSTER TAB ===== -->
+<div id="tab-roster" class="tab-content">
+  <div class="ai-panel" id="aiPanel" style="display:none">
+    <div class="ai-title">✨ AI Autofill in Progress</div>
+    <div class="ai-status" id="aiStatus">Preparing...</div>
+    <div class="ai-progress" id="aiProgress"><div class="ai-progress-bar"></div></div>
+  </div>
+  <div id="rosterGrid"></div>
+</div>
+
+<!-- ===== STAFF TAB ===== -->
+<div id="tab-staff" class="tab-content" style="display:none">
+  <div class="card">
+    <div class="card-hdr">
+      <span class="card-title">Staff Management</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-grn" onclick="addStaff('CN')">+ CN</button>
+        <button class="btn btn-sm btn-grn" onclick="addStaff('RN')">+ RN</button>
+        <button class="btn btn-sm btn-grn" onclick="addStaff('EN')">+ EN</button>
+      </div>
+    </div>
+    <div class="info-box mb-2">
+      <strong>Flags:</strong> TL = Team Leader capable &nbsp;|&nbsp; Shuttle = can do shuttle run &nbsp;|&nbsp; Flow = flow nurse &nbsp;|&nbsp; NO EVE = CN restriction (no evening shifts) auto-applied<br>
+      <strong>FTE hrs</strong> = total hours per <em>fortnight</em>
+    </div>
+    <div id="staffGrid" class="staff-grid"></div>
+  </div>
+</div>
+
+<!-- ===== LEAVE TAB ===== -->
+<div id="tab-leave" class="tab-content" style="display:none">
+  <div class="card">
+    <div class="card-hdr">
+      <span class="card-title">Leave & RED Days</span>
+      <div class="info-box text-sm">Click a day to toggle: blank → LEAVE → RED → blank. Max 3 RED per fortnight.</div>
+    </div>
+    <div id="leaveGrid" class="leave-grid"></div>
+  </div>
+</div>
+
+<!-- ===== FTE TAB ===== -->
+<div id="tab-fte" class="tab-content" style="display:none">
+  <div class="card">
+    <div class="card-hdr">
+      <span class="card-title">FTE Compliance — Current Fortnight</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" id="btnFTEFN1">FN1</button>
+        <button class="btn btn-sm active" id="btnFTEFN2">FN2</button>
+        <button class="btn btn-sm" id="btnFTEAll">Combined</button>
+      </div>
+    </div>
+    <div id="fteList" class="fte-list"></div>
+  </div>
+</div>
+
+<!-- ===== REPORT TAB ===== -->
+<div id="tab-report" class="tab-content" style="display:none">
+  <div id="reportContent"></div>
+</div>
+
+<!-- ===== LOG TAB ===== -->
+<div id="tab-log" class="tab-content" style="display:none">
+  <div class="card">
+    <div class="card-hdr">
+      <span class="card-title">Decision Log</span>
+      <button class="btn btn-sm" id="btnClearLog">Clear Log</button>
+    </div>
+    <div id="logBox" class="log-box">No log entries yet.</div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- CELL EDIT MODAL -->
+<div class="overlay" id="cellModal">
+  <div class="modal">
+    <div class="modal-title" id="cellModalTitle">Edit Cell</div>
+    <div class="modal-body" id="cellModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-sm btn-red" id="cellModalClear">Clear Cell</button>
+      <button class="btn btn-sm" id="cellModalClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONSTANTS & CONFIG
+// ═══════════════════════════════════════════════════════════
+
+const SHIFT_DEFS = {
+  EC: { name:'EC', label:'Early (6am)', time:'0600-1430', color:'#f0883e', hours:8, slots:['Team Leader','RN/EN'] },
+  E:  { name:'E',  label:'Early (7am)', time:'0700-1530', color:'#d29922', hours:8, slots:['Team Leader','RN/EN','Shuttle/Flow'] },
+  L:  { name:'L',  label:'Late',        time:'1100-1930', color:'#58a6ff', hours:8, slots:['RN/EN'] },
+  AM: { name:'AM', label:'AM',          time:'0700-1330', color:'#39d353', hours:6, slots:['EN Shuttle'] },
+  LD: { name:'LD', label:'Late Day',    time:'0830-1700', color:'#bc8cff', hours:8, slots:['RN/EN'] },
+  // Evening - CNs cannot do this
+  EVE:{ name:'EVE',label:'Evening',     time:'1400-2200', color:'#79c0ff', hours:8, slots:['RN/EN'] },
+  // Weekend
+  WD: { name:'WD', label:'Day (Wknd)',  time:'0700-1530', color:'#f0883e', hours:8, slots:['Team Leader','RN/EN','RN/EN'] },
+  WA: { name:'WA', label:'Aft (Wknd)', time:'1130-1930', color:'#58a6ff', hours:8, slots:['RN/EN'] },
+  WN: { name:'WN', label:'Eve (Wknd)', time:'1400-2200', color:'#79c0ff', hours:8, slots:['RN/EN'] },
+};
+
+// Weekday = Mon–Fri shifts, Weekend = Sat/Sun shifts
+const WEEKDAY_SHIFTS = ['EC','E','L','AM','LD','EVE'];
+const WEEKEND_SHIFTS = ['WD','WA','WN'];
+
+// CNs CANNOT work EVE (evening shift weekdays) - but CAN do weekend
+const CN_FORBIDDEN_SHIFTS = ['EVE'];
+
+const DEFAULT_STAFF = [
+  // CNs — all TL capable, shuttle capable
+  { id:'cn1', role:'CN', name:'Denise Endres',           fte:48, tl:true, shuttle:true, flow:false, enShuttle:false },
+  { id:'cn2', role:'CN', name:'Stephanie Field',         fte:64, tl:true, shuttle:true, flow:false, enShuttle:false },
+  { id:'cn3', role:'CN', name:'Adam Krenske',            fte:60, tl:true, shuttle:true, flow:true,  enShuttle:false },
+  // RNs
+  { id:'rn1', role:'RN', name:'Alison McCarthy',         fte:64, tl:true,  shuttle:false,flow:false, enShuttle:false },
+  { id:'rn2', role:'RN', name:'Arathi Nedunilath Xavier',fte:48, tl:true,  shuttle:false,flow:true,  enShuttle:false },
+  { id:'rn3', role:'RN', name:'Lani Hogan',              fte:56, tl:false, shuttle:false,flow:false, enShuttle:false },
+  { id:'rn4', role:'CN', name:'Natasha Roberts',         fte:64, tl:true,  shuttle:true, flow:true,  enShuttle:false },
+  { id:'rn5', role:'RN', name:'Katrina Contacos',        fte:64, tl:true,  shuttle:true, flow:true,  enShuttle:false },
+  { id:'rn6', role:'RN', name:'Chloe Watson',            fte:32, tl:false, shuttle:false,flow:false, enShuttle:false },
+  // ENs
+  { id:'en1', role:'EN', name:'Kristi Brayshaw',         fte:40, tl:false, shuttle:false,flow:false, enShuttle:true },
+  { id:'en2', role:'EN', name:'Sharon Hosking',          fte:76, tl:false, shuttle:false,flow:false, enShuttle:true },
+  { id:'en3', role:'EN', name:'Stephen James',           fte:48, tl:false, shuttle:false,flow:false, enShuttle:true },
+  { id:'en4', role:'EN', name:'Laura Sampson',           fte:64, tl:false, shuttle:false,flow:false, enShuttle:true },
+  { id:'en5', role:'EN', name:'Jessica Wilson',          fte:64, tl:false, shuttle:false,flow:false, enShuttle:true },
+];
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+let state = {
+  fortnight: 0,      // 0 = current, +/-1 navigation
+  staff: [],
+  roster: {},        // key: "dayNum|shiftId|slotIdx" => staffId[]
+  leave: {},         // key: "staffId|dayNum" => "leave"|"red"|null
+  log: [],
+  fteView: 'fn2',    // fn1, fn2, all
+};
+
+// ═══════════════════════════════════════════════════════════
+// DATE HELPERS
+// ═══════════════════════════════════════════════════════════
+function getFortnight(offset=0) {
+  const now = new Date();
+  // Find Monday of current week
+  const dow = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+  monday.setHours(0,0,0,0);
+  // Add offset fortnights
+  monday.setDate(monday.getDate() + offset * 14);
+  // Find the fortnight start (Monday on or before monday, in 14-day cycles from epoch)
+  const epoch = new Date('2024-01-01'); // Monday
+  const daysSinceEpoch = Math.floor((monday - epoch) / 86400000);
+  const fnStart = new Date(epoch);
+  fnStart.setDate(epoch.getDate() + Math.floor(daysSinceEpoch / 14) * 14);
+  const days = [];
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(fnStart);
+    d.setDate(fnStart.getDate() + i);
+    const dow2 = d.getDay();
+    days.push({
+      date: d,
+      dayNum: i,
+      dayName: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow2],
+      dateStr: d.toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit'}),
+      isWeekend: dow2 === 0 || dow2 === 6,
+      fn: i < 7 ? 1 : 2,
+      isToday: d.toDateString() === now.toDateString(),
+    });
+  }
+  return { days, start:fnStart, label:`FN ${fnStart.toLocaleDateString('en-AU',{day:'2-digit',month:'short'})} – ${days[13].date.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'2-digit'})}` };
+}
+
+// ═══════════════════════════════════════════════════════════
+// ROSTER KEY
+// ═══════════════════════════════════════════════════════════
+function rKey(dayNum, shiftId, slotIdx) {
+  return `${dayNum}|${shiftId}|${slotIdx}`;
+}
+function leaveKey(staffId, dayNum) {
+  return `${staffId}|${dayNum}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// STAFF HELPERS
+// ═══════════════════════════════════════════════════════════
+function getStaff(id) { return state.staff.find(s => s.id === id); }
+function allStaff() { return state.staff.filter(s => s.name.trim()); }
+function staffByRole(role) { return allStaff().filter(s => s.role === role); }
+
+function staffColor(role) {
+  if (role==='CN') return 'cn';
+  if (role==='RN') return 'rn';
+  return 'en';
+}
+
+// ═══════════════════════════════════════════════════════════
+// FTE TRACKING
+// ═══════════════════════════════════════════════════════════
+function calcHours(staffId, fn=null) {
+  const fn_ = getFortnight(state.fortnight);
+  let total = 0;
+  const days = fn ? fn_.days.filter(d => d.fn === fn) : fn_.days;
+  for (const day of days) {
+    const shifts = day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS;
+    for (const shiftId of shifts) {
+      const def = SHIFT_DEFS[shiftId];
+      for (let si = 0; si < def.slots.length; si++) {
+        const key = rKey(day.dayNum, shiftId, si);
+        const assigned = state.roster[key] || [];
+        if (assigned.includes(staffId)) total += def.hours;
+      }
+    }
+  }
+  return total;
+}
+
+function getFteTarget(staff, fn=null) {
+  // Per-FN target = half of fortnight hours
+  if (fn) return Math.round(staff.fte / 2);
+  return staff.fte;
+}
+
+// ═══════════════════════════════════════════════════════════
+// AVAILABILITY CHECKS
+// ═══════════════════════════════════════════════════════════
+function isOnLeave(staffId, dayNum) {
+  const lv = state.leave[leaveKey(staffId, dayNum)];
+  return lv === 'leave' || lv === 'red';
+}
+
+function isWorkingDay(staffId, dayNum) {
+  // Check if already assigned to any shift this day
+  const fn_ = getFortnight(state.fortnight);
+  const day = fn_.days[dayNum];
+  const shifts = day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS;
+  for (const shiftId of shifts) {
+    const def = SHIFT_DEFS[shiftId];
+    for (let si = 0; si < def.slots.length; si++) {
+      const key = rKey(dayNum, shiftId, si);
+      if ((state.roster[key]||[]).includes(staffId)) return true;
+    }
+  }
+  return false;
+}
+
+function canWorkShift(staff, shiftId) {
+  // CNs cannot do evening (weekday EVE)
+  if (staff.role === 'CN' && CN_FORBIDDEN_SHIFTS.includes(shiftId)) return false;
+  // Slot-specific qualification checks done separately
+  return true;
+}
+
+function canFillSlot(staff, shiftId, slotLabel) {
+  if (!canWorkShift(staff, shiftId)) return false;
+  const sl = slotLabel.toLowerCase();
+  if (sl.includes('team leader') || sl.includes('tl')) {
+    return staff.tl === true;
+  }
+  if (sl.includes('en shuttle')) {
+    return staff.enShuttle === true;
+  }
+  if (sl.includes('shuttle')) {
+    return staff.shuttle === true;
+  }
+  if (sl.includes('flow')) {
+    return staff.flow === true || staff.shuttle === true;
+  }
+  return true;
+}
+
+function maxConsecutiveEarlies(staffId, dayNum, fn_) {
+  // Count how many consecutive early shifts (EC/E) in the 3 days before dayNum
+  let count = 0;
+  for (let d = dayNum - 1; d >= Math.max(0, dayNum - 3); d--) {
+    const day = fn_.days[d];
+    if (!day || day.isWeekend) break;
+    let hadEarly = false;
+    for (const shiftId of ['EC','E']) {
+      const def = SHIFT_DEFS[shiftId];
+      for (let si = 0; si < def.slots.length; si++) {
+        if ((state.roster[rKey(d, shiftId, si)]||[]).includes(staffId)) { hadEarly = true; break; }
+      }
+    }
+    if (hadEarly) count++; else break;
+  }
+  return count;
+}
+
+// ═══════════════════════════════════════════════════════════
+// QUICK FILL (legacy algorithm)
+// ═══════════════════════════════════════════════════════════
+function quickFill() {
+  addLog('=== QUICK FILL START ===', 'hdr');
+  const fn_ = getFortnight(state.fortnight);
+  const newRoster = {};
+
+  // Track hours per FN
+  const hoursPerFn = {};
+  allStaff().forEach(s => { hoursPerFn[s.id] = {1:0, 2:0}; });
+
+  function assignStaff(staffId, dayNum, shiftId, slotIdx, hours) {
+    const key = rKey(dayNum, shiftId, slotIdx);
+    if (!newRoster[key]) newRoster[key] = [];
+    newRoster[key].push(staffId);
+    const fn = fn_.days[dayNum].fn;
+    hoursPerFn[staffId][fn] = (hoursPerFn[staffId][fn]||0) + hours;
+  }
+
+  function isAssignedThisDay(staffId, dayNum) {
+    const day = fn_.days[dayNum];
+    const shifts = day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS;
+    for (const sh of shifts) {
+      const def = SHIFT_DEFS[sh];
+      for (let si = 0; si < def.slots.length; si++) {
+        if ((newRoster[rKey(dayNum, sh, si)]||[]).includes(staffId)) return true;
+      }
+    }
+    return false;
+  }
+
+  function getBestCandidates(dayNum, shiftId, slotLabel, preferRole=null, excludeIds=[]) {
+    const day = fn_.days[dayNum];
+    const fn = day.fn;
+    const def = SHIFT_DEFS[shiftId];
+    return allStaff().filter(s => {
+      if (excludeIds.includes(s.id)) return false;
+      if (isOnLeave(s.id, dayNum)) return false;
+      if (isAssignedThisDay(s.id, dayNum)) return false;
+      if (!canFillSlot(s, shiftId, slotLabel)) return false;
+      const target = getFteTarget(s, fn);
+      if (hoursPerFn[s.id][fn] >= target) return false;
+      // Max consecutive earlies
+      if (['EC','E'].includes(shiftId)) {
+        if (maxConsecutiveEarlies(s.id, dayNum, fn_) >= 3) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      // Priority: 1) preferred role, 2) remaining hours gap
+      const aRole = preferRole ? (a.role === preferRole ? -100 : 0) : 0;
+      const bRole = preferRole ? (b.role === preferRole ? -100 : 0) : 0;
+      const aGap = getFteTarget(a, fn) - hoursPerFn[a.id][fn];
+      const bGap = getFteTarget(b, fn) - hoursPerFn[b.id][fn];
+      return (aRole - bRole) || (bGap - aGap);
+    });
+  }
+
+  // Phase 1: Weekdays
+  for (const day of fn_.days.filter(d => !d.isWeekend)) {
+    // Track TL already assigned today (one CN morning rule)
+    let cnMorningAssigned = false;
+
+    for (const shiftId of WEEKDAY_SHIFTS) {
+      const def = SHIFT_DEFS[shiftId];
+      // Skip EVE for CNs — handled via canFillSlot
+      for (let si = 0; si < def.slots.length; si++) {
+        const slotLabel = def.slots[si];
+        const key = rKey(day.dayNum, shiftId, si);
+
+        // One CN morning rule: EC TL and E TL share the same CN
+        if ((shiftId === 'EC' || shiftId === 'E') && slotLabel.toLowerCase().includes('team leader')) {
+          if (cnMorningAssigned) {
+            // Skip — re-use same TL concept (TL slot left empty or use RN TL)
+            const rnTL = getBestCandidates(day.dayNum, shiftId, slotLabel, 'RN', []).find(s => s.role==='RN' && s.tl);
+            if (rnTL) {
+              assignStaff(rnTL.id, day.dayNum, shiftId, si, def.hours);
+              addLog(`  Day${day.dayNum} ${shiftId}[${si}] → ${rnTL.name} (RN TL, CN morning already filled)`, 'ok');
+            }
+            continue;
+          }
+          const cnTL = getBestCandidates(day.dayNum, shiftId, slotLabel, 'CN', []).find(s => s.role==='CN');
+          if (cnTL) {
+            assignStaff(cnTL.id, day.dayNum, shiftId, si, def.hours);
+            cnMorningAssigned = true;
+            addLog(`  Day${day.dayNum} ${shiftId}[${si}] → ${cnTL.name} (CN TL)`, 'ok');
+            continue;
+          }
+        }
+
+        const candidates = getBestCandidates(day.dayNum, shiftId, slotLabel);
+        if (candidates.length > 0) {
+          assignStaff(candidates[0].id, day.dayNum, shiftId, si, def.hours);
+          addLog(`  Day${day.dayNum} ${shiftId}[${si}] → ${candidates[0].name}`, 'ok');
+        } else {
+          addLog(`  Day${day.dayNum} ${shiftId}[${si}] → ⚠️ No candidate`, 'warn');
+        }
+      }
+    }
+  }
+
+  // Phase 2: Weekends
+  for (const day of fn_.days.filter(d => d.isWeekend)) {
+    for (const shiftId of WEEKEND_SHIFTS) {
+      const def = SHIFT_DEFS[shiftId];
+      for (let si = 0; si < def.slots.length; si++) {
+        const slotLabel = def.slots[si];
+        const candidates = getBestCandidates(day.dayNum, shiftId, slotLabel);
+        if (candidates.length > 0) {
+          assignStaff(candidates[0].id, day.dayNum, shiftId, si, def.hours);
+        }
+      }
+    }
+  }
+
+  state.roster = newRoster;
+  addLog('=== QUICK FILL COMPLETE ===', 'hdr');
+  saveState();
+  renderRoster();
+  renderFTE();
+  renderReport();
+}
+
+// ═══════════════════════════════════════════════════════════
+// AI AUTOFILL
+// ═══════════════════════════════════════════════════════════
+async function aiAutofill() {
+  // AI autofill requires the file to be served, not opened from disk (file://)
+  if (window.location.protocol === 'file:') {
+    const use = confirm(
+      '\u26a0\ufe0f AI Autofill cannot run when opened directly from disk (file://).\n\n' +
+      'It works when served via a web server or claude.ai.\n\n' +
+      'Run Quick Fill (offline) instead?'
+    );
+    if (use) quickFill();
+    return;
+  }
+
+  const fn_ = getFortnight(state.fortnight);
+
+  // Build context summary for AI
+  const staffSummary = allStaff().map(s => ({
+    id: s.id,
+    name: s.name,
+    role: s.role,
+    fte: s.fte,
+    tl: s.tl,
+    shuttle: s.shuttle,
+    flow: s.flow,
+    enShuttle: s.enShuttle,
+    targetPerFN: Math.round(s.fte / 2),
+  }));
+
+  const leaveSummary = [];
+  for (const [key, val] of Object.entries(state.leave)) {
+    if (val) {
+      const [staffId, dayNum] = key.split('|');
+      const s = getStaff(staffId);
+      if (s) leaveSummary.push({ staff: s.name, day: parseInt(dayNum), type: val });
+    }
+  }
+
+  const prompt = `You are an expert hospital roster scheduler for Robina Hospital Transfer Unit.
+
+FORTNIGHT: Days 0–13 (0=Mon FN1, 6=Sun FN1, 7=Mon FN2, 13=Sun FN2)
+Day types: Days 0,1,2,3,4 = Mon-Fri (FN1), Day 5,6 = Sat,Sun (FN1), Days 7,8,9,10,11 = Mon-Fri (FN2), Days 12,13 = Sat,Sun (FN2)
+
+SHIFTS (weekdays only): EC(0600-1430,8h), E(0700-1530,8h), L(1100-1930,8h), AM(0700-1330,6h), LD(0830-1700,8h), EVE(1400-2200,8h)
+SHIFTS (weekends only): WD(0700-1530,8h), WA(1130-1930,8h), WN(1400-2200,8h)
+
+SLOTS PER SHIFT:
+- EC: [0]=Team Leader, [1]=RN/EN
+- E: [0]=Team Leader, [1]=RN/EN, [2]=Shuttle/Flow
+- L: [0]=RN/EN
+- AM: [0]=EN Shuttle
+- LD: [0]=RN/EN
+- EVE: [0]=RN/EN
+- WD: [0]=Team Leader, [1]=RN/EN, [2]=RN/EN
+- WA: [0]=RN/EN
+- WN: [0]=RN/EN
+
+CRITICAL RULES:
+1. ONE CN morning rule: only ONE CN can be Team Leader across EC AND E per day (not one each)
+2. CNs CANNOT work EVE (evening shift) on weekdays. CNs CAN work all weekend shifts.
+3. ENs can only fill EN Shuttle slots (AM[0]) and general RN/EN slots — NOT Team Leader slots
+4. Only staff with tl:true can fill Team Leader slots
+5. Only staff with enShuttle:true can fill EN Shuttle (AM) slots
+6. Only staff with shuttle:true or flow:true can fill Shuttle/Flow slots
+7. Max 3 consecutive EC or E shifts for any staff member
+8. Each staff works max 1 shift per day
+9. Target hours per FN: targetPerFN (half of fte). Do not exceed fte total.
+10. Prefer staff who need more hours (further from FTE target)
+11. Spread weekends fairly — each staff should get similar number of weekend days
+12. Staff on leave must not be scheduled
+
+STAFF:
+${JSON.stringify(staffSummary, null, 2)}
+
+LEAVE:
+${JSON.stringify(leaveSummary, null, 2)}
+
+CURRENT PARTIAL ROSTER (already assigned — DO NOT overwrite these):
+${JSON.stringify(state.roster, null, 2)}
+
+Generate a COMPLETE roster assignment for ALL unfilled slots.
+
+Return ONLY valid JSON with this structure:
+{
+  "assignments": [
+    { "dayNum": 0, "shiftId": "EC", "slotIdx": 0, "staffId": "cn1" },
+    ...
+  ],
+  "notes": "brief summary of any issues or decisions made"
+}
+
+Include only NEW assignments (not already in the current roster). Be thorough — fill every slot possible.`;
+
+  // Show AI panel
+  document.getElementById('aiPanel').style.display = 'block';
+  document.getElementById('aiProgress').style.display = 'block';
+  setAIStatus('Sending roster data to AI...');
+  addLog('=== AI AUTOFILL START ===', 'ai');
+
+  try {
+    setAIStatus('AI is scheduling roster...');
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!response.ok) {
+      let errMsg = `HTTP ${response.status}`;
+      try { const err = await response.json(); errMsg = err.error?.message || errMsg; } catch(e) {}
+      throw new Error(errMsg);
+    }
+
+    const data = await response.json();
+    const text = data.content.map(c => c.text||'').join('');
+
+    // Parse JSON from response
+    setAIStatus('Parsing AI response...');
+    let parsed;
+    try {
+      const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+      // Find JSON object
+      const jsonMatch = clean.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
+    } catch(e) {
+      throw new Error('Could not parse AI response as JSON: ' + text.slice(0,200));
+    }
+
+    // Apply assignments
+    let applied = 0, skipped = 0;
+    const assignments = parsed.assignments || [];
+    for (const a of assignments) {
+      const key = rKey(a.dayNum, a.shiftId, a.slotIdx);
+      // Don't overwrite existing
+      if (state.roster[key] && state.roster[key].length > 0) { skipped++; continue; }
+      // Validate staff exists
+      const s = getStaff(a.staffId);
+      if (!s) { addLog(`  Skip: staffId ${a.staffId} not found`, 'warn'); skipped++; continue; }
+      // Validate slot rules
+      const def = SHIFT_DEFS[a.shiftId];
+      if (!def) { skipped++; continue; }
+      const slotLabel = def.slots[a.slotIdx] || '';
+      if (!canFillSlot(s, a.shiftId, slotLabel)) {
+        addLog(`  Skip: ${s.name} cannot fill ${a.shiftId}[${a.slotIdx}] (${slotLabel})`, 'warn');
+        skipped++;
+        continue;
+      }
+      if (!state.roster[key]) state.roster[key] = [];
+      state.roster[key].push(a.staffId);
+      applied++;
+    }
+
+    if (parsed.notes) addLog(`AI notes: ${parsed.notes}`, 'ai');
+    addLog(`Applied ${applied} assignments, skipped ${skipped}`, 'ok');
+    addLog('=== AI AUTOFILL COMPLETE ===', 'ai');
+
+    setAIStatus(`✅ Done! Applied ${applied} assignments.`);
+    setTimeout(() => { document.getElementById('aiPanel').style.display = 'none'; }, 3000);
+
+    saveState();
+    renderRoster();
+    renderFTE();
+    renderReport();
+
+  } catch(err) {
+    addLog(`AI Error: ${err.message}`, 'err');
+    setAIStatus(`❌ Error: ${err.message}`);
+    document.getElementById('aiProgress').style.display = 'none';
+    alert(`AI Autofill failed:\n${err.message}\n\nTry Quick Fill instead.`);
+  }
+}
+
+function setAIStatus(msg) {
+  document.getElementById('aiStatus').textContent = msg;
+}
+
+// ═══════════════════════════════════════════════════════════
+// LOGGING
+// ═══════════════════════════════════════════════════════════
+function addLog(msg, type='') {
+  state.log.push({ msg, type, time: new Date().toLocaleTimeString() });
+  const box = document.getElementById('logBox');
+  if (box) {
+    const line = document.createElement('div');
+    line.className = type ? `log-${type}` : '';
+    line.textContent = `[${state.log[state.log.length-1].time}] ${msg}`;
+    if (box.textContent === 'No log entries yet.') box.textContent = '';
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER ROSTER GRID
+// ═══════════════════════════════════════════════════════════
+function renderRoster() {
+  const fn_ = getFortnight(state.fortnight);
+  document.getElementById('fnLabel').textContent = fn_.label;
+
+  let html = `<div class="grid-wrap"><table class="roster"><thead><tr>
+    <th class="col-shift" style="position:sticky;top:0;left:0;z-index:4;background:var(--bg3)">Shift / Slot</th>`;
+
+  for (const day of fn_.days) {
+    const cls = day.isWeekend ? 'col-day-hdr weekend' : 'col-day-hdr';
+    const todayCls = day.isToday ? ' style="border-bottom:2px solid var(--acc)"' : '';
+    html += `<th class="${cls}"${todayCls}>
+      <div class="day-name">${day.dayName}</div>
+      <div class="day-date">${day.dateStr}</div>
+      <div class="day-fn">FN${day.fn}</div>
+    </th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  // Render each shift/slot as its own row
+  const allShifts = [...WEEKDAY_SHIFTS.map(id=>({id,weekend:false})), ...WEEKEND_SHIFTS.map(id=>({id,weekend:true}))];
+
+  for (const { id: shiftId, weekend: isWkndShift } of allShifts) {
+    const def = SHIFT_DEFS[shiftId];
+    for (let si = 0; si < def.slots.length; si++) {
+      const slotLabel = def.slots[si];
+      html += `<tr>
+        <td class="col-shift">
+          <div class="shift-hdr" style="border-left:3px solid ${def.color}">
+            <div class="shift-name">${def.name}</div>
+            <div class="shift-time">${def.time}</div>
+            <div class="shift-slot">${slotLabel}</div>
+          </div>
+        </td>`;
+
+      for (const day of fn_.days) {
+        const applicable = isWkndShift ? day.isWeekend : !day.isWeekend;
+        const onLeaveAny = allStaff().some(s => isOnLeave(s.id, day.dayNum));
+        const todayCls = day.isToday ? ' today' : '';
+        const wkndCls = day.isWeekend ? ' weekend' : '';
+
+        if (!applicable) {
+          html += `<td class="cell${wkndCls}${todayCls}" style="background:var(--bg);opacity:.3">—</td>`;
+        } else {
+          const key = rKey(day.dayNum, shiftId, si);
+          const assigned = state.roster[key] || [];
+          html += `<td class="cell${wkndCls}${todayCls}" onclick="openCellModal('${day.dayNum}','${shiftId}','${si}')">`;
+          if (assigned.length === 0) {
+            html += `<div class="cell-empty">+</div>`;
+          } else {
+            html += `<div class="cell-staff">`;
+            for (const sid of assigned) {
+              const s = getStaff(sid);
+              if (s) {
+                html += `<span class="staff-tag ${staffColor(s.role)}" title="${s.name} (${s.role})" onclick="removeFromCell(event,'${day.dayNum}','${shiftId}','${si}','${sid}')">
+                  ${s.name.split(' ')[0]}<span style="opacity:.5;font-size:9px"> ✕</span>
+                </span>`;
+              }
+            }
+            html += `</div>`;
+          }
+          html += `</td>`;
+        }
+      }
+      html += '</tr>';
+    }
+  }
+
+  html += '</tbody></table></div>';
+  document.getElementById('rosterGrid').innerHTML = html;
+}
+
+function removeFromCell(e, dayNum, shiftId, slotIdx, staffId) {
+  e.stopPropagation();
+  const key = rKey(dayNum, shiftId, slotIdx);
+  if (state.roster[key]) {
+    state.roster[key] = state.roster[key].filter(id => id !== staffId);
+    if (state.roster[key].length === 0) delete state.roster[key];
+  }
+  saveState();
+  renderRoster();
+  renderFTE();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CELL MODAL
+// ═══════════════════════════════════════════════════════════
+let _cellContext = null;
+
+function openCellModal(dayNum, shiftId, slotIdx) {
+  _cellContext = { dayNum: parseInt(dayNum), shiftId, slotIdx: parseInt(slotIdx) };
+  const fn_ = getFortnight(state.fortnight);
+  const day = fn_.days[parseInt(dayNum)];
+  const def = SHIFT_DEFS[shiftId];
+  const slotLabel = def.slots[parseInt(slotIdx)];
+  const key = rKey(dayNum, shiftId, slotIdx);
+  const current = state.roster[key] || [];
+
+  document.getElementById('cellModalTitle').textContent =
+    `${day.dayName} ${day.dateStr} — ${def.name} [${slotLabel}]`;
+
+  let body = `<div class="text-sm text-muted mb-1">${def.time} • ${def.label}</div>`;
+  body += `<div class="section-label">Select Staff</div><div class="staff-pick">`;
+
+  for (const s of allStaff()) {
+    const onLeave = isOnLeave(s.id, parseInt(dayNum));
+    const workingElsewhere = isWorkingDay(s.id, parseInt(dayNum)) && !current.includes(s.id);
+    const canDo = canFillSlot(s, shiftId, slotLabel);
+    const selected = current.includes(s.id);
+    let cls = `staff-pick-btn ${staffColor(s.role)}`;
+    if (selected) cls += ' selected';
+    if (onLeave || !canDo) cls += ' unavail';
+    const title = onLeave ? 'On Leave' : !canDo ? 'Not qualified' : workingElsewhere ? 'Working elsewhere today' : '';
+    body += `<button class="${cls}" title="${title}" onclick="toggleCellStaff('${s.id}')" ${onLeave||!canDo?'disabled':''}>
+      ${s.name.split(' ')[0]} <span style="font-size:9px;opacity:.6">${s.role}</span>
+    </button>`;
+  }
+  body += `</div>`;
+
+  // FN hours info
+  const fn = day.fn;
+  body += `<hr class="divider"><div class="section-label">Hours This FN</div>`;
+  const shown = allStaff().filter(s => canFillSlot(s, shiftId, slotLabel));
+  body += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-size:10px;color:var(--txt2)">`;
+  for (const s of shown.slice(0,12)) {
+    const h = calcHours(s.id, fn);
+    const t = getFteTarget(s, fn);
+    const pct = Math.round(h/t*100);
+    const col = pct >= 100 ? 'var(--red)' : pct >= 85 ? 'var(--org)' : 'var(--grn)';
+    body += `<div style="color:${col}">${s.name.split(' ')[0]}: ${h}/${t}h</div>`;
+  }
+  body += `</div>`;
+
+  document.getElementById('cellModalBody').innerHTML = body;
+  document.getElementById('cellModal').classList.add('show');
+}
+
+function toggleCellStaff(staffId) {
+  if (!_cellContext) return;
+  const { dayNum, shiftId, slotIdx } = _cellContext;
+  const key = rKey(dayNum, shiftId, slotIdx);
+  if (!state.roster[key]) state.roster[key] = [];
+  const idx = state.roster[key].indexOf(staffId);
+  if (idx >= 0) {
+    state.roster[key].splice(idx, 1);
+  } else {
+    state.roster[key].push(staffId);
+  }
+  saveState();
+  renderRoster();
+  renderFTE();
+  // Refresh modal
+  openCellModal(dayNum, shiftId, slotIdx);
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER STAFF
+// ═══════════════════════════════════════════════════════════
+function renderStaff() {
+  let html = '';
+  for (const role of ['CN','RN','EN']) {
+    const group = state.staff.filter(s => s.role === role);
+    if (!group.length) continue;
+    html += `<div class="mb-2"><div class="section-label" style="color:var(--${staffColor(role)})">${role}s (${group.length})</div><div class="staff-grid">`;
+    for (const s of group) {
+      html += renderStaffCard(s);
+    }
+    html += '</div></div>';
+  }
+  document.getElementById('staffGrid').innerHTML = html;
+}
+
+function renderStaffCard(s) {
+  const role = s.role;
+  const isEN = role === 'EN';
+  const isCN = role === 'CN';
+  return `<div class="staff-card" id="sc-${s.id}">
+    <div class="staff-card-hdr">
+      <input class="staff-name-input" value="${s.name}" placeholder="Staff name..."
+        onchange="updateStaff('${s.id}','name',this.value)">
+      <span class="role-badge ${role}">${role}</span>
+      <button class="staff-del" onclick="deleteStaff('${s.id}')" title="Delete">×</button>
+    </div>
+    <div class="staff-fields">
+      <div class="field-group">
+        <label class="field-label">FTE Hrs (per FN × 2)</label>
+        <input class="field-input" type="number" min="8" max="76" step="0.5" value="${s.fte}"
+          onchange="updateStaff('${s.id}','fte',parseFloat(this.value))">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Role</label>
+        <select class="field-input" onchange="updateStaff('${s.id}','role',this.value)">
+          <option ${role==='CN'?'selected':''}>CN</option>
+          <option ${role==='RN'?'selected':''}>RN</option>
+          <option ${role==='EN'?'selected':''}>EN</option>
+        </select>
+      </div>
+    </div>
+    <div class="staff-flags">
+      ${!isEN ? `<label class="flag-cb"><input type="checkbox" ${s.tl?'checked':''} onchange="updateStaff('${s.id}','tl',this.checked)"> TL</label>` : ''}
+      ${!isEN ? `<label class="flag-cb"><input type="checkbox" ${s.shuttle?'checked':''} onchange="updateStaff('${s.id}','shuttle',this.checked)"> Shuttle RN</label>` : ''}
+      ${isEN ? `<label class="flag-cb"><input type="checkbox" ${s.enShuttle?'checked':''} onchange="updateStaff('${s.id}','enShuttle',this.checked)"> EN Shuttle</label>` : ''}
+      <label class="flag-cb"><input type="checkbox" ${s.flow?'checked':''} onchange="updateStaff('${s.id}','flow',this.checked)"> Flow</label>
+      ${isCN ? `<span class="tag" title="CNs cannot work weekday evenings">🚫 No EVE</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function updateStaff(id, field, value) {
+  const s = state.staff.find(s => s.id === id);
+  if (!s) return;
+  s[field] = value;
+  saveState();
+  if (field === 'role') renderStaff(); // Re-render to update flags
+}
+
+function addStaff(role) {
+  const id = 'staff_' + Date.now();
+  state.staff.push({ id, role, name:'', fte:38, tl:role!=='EN', shuttle:role!=='EN', flow:false, enShuttle:role==='EN' });
+  saveState();
+  renderStaff();
+}
+
+function deleteStaff(id) {
+  if (!confirm('Delete this staff member?')) return;
+  state.staff = state.staff.filter(s => s.id !== id);
+  // Remove from roster
+  for (const key in state.roster) {
+    state.roster[key] = state.roster[key].filter(sid => sid !== id);
+    if (state.roster[key].length === 0) delete state.roster[key];
+  }
+  saveState();
+  renderStaff();
+  renderRoster();
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER LEAVE
+// ═══════════════════════════════════════════════════════════
+function renderLeave() {
+  const fn_ = getFortnight(state.fortnight);
+  let html = '';
+  for (const s of allStaff()) {
+    html += `<div class="leave-card">
+      <div class="leave-staff">${s.name} <span class="role-badge ${s.role}" style="font-size:9px">${s.role}</span></div>
+      <div class="leave-days">`;
+    for (const day of fn_.days) {
+      const key = leaveKey(s.id, day.dayNum);
+      const state_ = state.leave[key] || '';
+      const cls = state_ === 'leave' ? 'leave' : state_ === 'red' ? 'red' : '';
+      html += `<button class="leave-day-btn ${cls}" onclick="toggleLeave('${s.id}',${day.dayNum})"
+        title="${state_||'Available'}">${day.dayName[0]}${day.dateStr.split('/')[0]}</button>`;
+    }
+    html += `</div></div>`;
+  }
+  document.getElementById('leaveGrid').innerHTML = html;
+}
+
+function toggleLeave(staffId, dayNum) {
+  const key = leaveKey(staffId, dayNum);
+  const cur = state.leave[key] || '';
+  if (!cur) {
+    state.leave[key] = 'leave';
+  } else if (cur === 'leave') {
+    // Check RED limit
+    const fn_ = getFortnight(state.fortnight);
+    const day = fn_.days[dayNum];
+    const redCount = fn_.days.filter(d => d.fn === day.fn).filter(d => state.leave[leaveKey(staffId, d.dayNum)] === 'red').length;
+    if (redCount >= 3) { alert('Max 3 RED days per fortnight'); return; }
+    state.leave[key] = 'red';
+  } else {
+    delete state.leave[key];
+  }
+  saveState();
+  renderLeave();
+  renderRoster();
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER FTE
+// ═══════════════════════════════════════════════════════════
+function renderFTE() {
+  const fn_ = getFortnight(state.fortnight);
+  const fteView = state.fteView;
+  const fn = fteView === 'fn1' ? 1 : fteView === 'fn2' ? 2 : null;
+
+  let html = '';
+  for (const role of ['CN','RN','EN']) {
+    const group = state.staff.filter(s => s.role === role && s.name.trim());
+    if (!group.length) continue;
+    html += `<div class="section-label" style="color:var(--${staffColor(role)});margin-top:10px">${role}s</div><div class="fte-list">`;
+    for (const s of group) {
+      const h = calcHours(s.id, fn);
+      const target = getFteTarget(s, fn);
+      const pct = target > 0 ? Math.min(100, Math.round(h / target * 100)) : 0;
+      const barCls = pct >= 100 ? 'over' : pct >= 90 ? 'close' : pct >= 60 ? 'ok' : 'low';
+      html += `<div class="fte-row">
+        <div class="fte-name" title="${s.name}">${s.name}</div>
+        <div class="fte-hrs">${h}/${target}h</div>
+        <div class="fte-bar-wrap"><div class="fte-bar ${barCls}" style="width:${pct}%"></div></div>
+        <div class="fte-pct">${pct}%</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  document.getElementById('fteList').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER REPORT
+// ═══════════════════════════════════════════════════════════
+function renderReport() {
+  const fn_ = getFortnight(state.fortnight);
+
+  // FTE compliance table
+  let html = `<div class="report-section">
+    <div class="report-title">FTE Compliance</div>
+    <table class="report-table">
+      <thead><tr><th>Staff</th><th>Role</th><th>FN1 Hrs</th><th>FN1 Target</th><th>FN2 Hrs</th><th>FN2 Target</th><th>Total</th><th>Target</th><th>Status</th></tr></thead><tbody>`;
+
+  for (const s of allStaff()) {
+    const h1 = calcHours(s.id, 1), h2 = calcHours(s.id, 2), hT = h1 + h2;
+    const t1 = getFteTarget(s, 1), t2 = getFteTarget(s, 2);
+    const ok = hT >= s.fte * .9 && hT <= s.fte * 1.1;
+    const warn = !ok;
+    html += `<tr>
+      <td>${s.name}</td>
+      <td><span class="role-badge ${s.role}">${s.role}</span></td>
+      <td>${h1}</td><td>${t1}</td>
+      <td>${h2}</td><td>${t2}</td>
+      <td><strong>${hT}</strong></td><td>${s.fte}</td>
+      <td><span class="badge ${ok?'badge-ok':'badge-warn'}">${ok?'OK':'⚠'}</span></td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  // Coverage table
+  html += `<div class="report-section">
+    <div class="report-title">Daily Coverage</div>
+    <table class="report-table">
+      <thead><tr><th>Day</th><th>Date</th><th>EC</th><th>E</th><th>L</th><th>AM</th><th>LD</th><th>EVE</th><th>Issues</th></tr></thead><tbody>`;
+
+  for (const day of fn_.days.filter(d => !d.isWeekend)) {
+    const shifts = { EC:0, E:0, L:0, AM:0, LD:0, EVE:0 };
+    for (const sh of WEEKDAY_SHIFTS) {
+      const def = SHIFT_DEFS[sh];
+      for (let si = 0; si < def.slots.length; si++) {
+        shifts[sh] += (state.roster[rKey(day.dayNum, sh, si)]||[]).length;
+      }
+    }
+    const issues = [];
+    if (shifts.EC < 2) issues.push(`EC under (${shifts.EC})`);
+    if (shifts.E < 2) issues.push(`E under (${shifts.E})`);
+    html += `<tr>
+      <td>${day.dayName}</td><td>${day.dateStr}</td>
+      ${WEEKDAY_SHIFTS.map(sh => `<td style="${shifts[sh]===0?'color:var(--red)':''}>${shifts[sh]}</td>`).join('')}
+      <td style="color:var(--red)">${issues.join(', ')}</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  // CN morning rule audit
+  html += `<div class="report-section">
+    <div class="report-title">CN Morning Rule Audit</div>
+    <table class="report-table">
+      <thead><tr><th>Day</th><th>EC TL</th><th>E TL</th><th>Rule OK</th></tr></thead><tbody>`;
+
+  for (const day of fn_.days.filter(d => !d.isWeekend)) {
+    const ecTL = (state.roster[rKey(day.dayNum,'EC',0)]||[]).map(id => getStaff(id)?.name||id);
+    const eTL  = (state.roster[rKey(day.dayNum,'E',0)]||[]).map(id => getStaff(id)?.name||id);
+    const allTLids = [...(state.roster[rKey(day.dayNum,'EC',0)]||[]), ...(state.roster[rKey(day.dayNum,'E',0)]||[])];
+    const cnCount = allTLids.filter(id => getStaff(id)?.role === 'CN').length;
+    const ok = cnCount <= 1;
+    html += `<tr>
+      <td>${day.dayName} ${day.dateStr}</td>
+      <td>${ecTL.join(', ')||'—'}</td>
+      <td>${eTL.join(', ')||'—'}</td>
+      <td><span class="badge ${ok?'badge-ok':'badge-err'}">${ok?'OK':'VIOLATION'}</span></td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  // CN evening audit
+  html += `<div class="report-section">
+    <div class="report-title">CN No-EVE Rule Audit</div>
+    <table class="report-table">
+      <thead><tr><th>Day</th><th>EVE Assigned</th><th>CN in EVE?</th><th>Rule OK</th></tr></thead><tbody>`;
+
+  for (const day of fn_.days.filter(d => !d.isWeekend)) {
+    const eveDef = SHIFT_DEFS['EVE'];
+    const eveStaff = [];
+    for (let si = 0; si < eveDef.slots.length; si++) {
+      (state.roster[rKey(day.dayNum,'EVE',si)]||[]).forEach(id => {
+        const s = getStaff(id); if (s) eveStaff.push(s);
+      });
+    }
+    const cnInEve = eveStaff.filter(s => s.role === 'CN');
+    const ok = cnInEve.length === 0;
+    if (!ok || eveStaff.length > 0) {
+      html += `<tr>
+        <td>${day.dayName} ${day.dateStr}</td>
+        <td>${eveStaff.map(s=>s.name).join(', ')||'—'}</td>
+        <td>${cnInEve.map(s=>s.name).join(', ')||'None'}</td>
+        <td><span class="badge ${ok?'badge-ok':'badge-err'}">${ok?'OK':'VIOLATION'}</span></td>
+      </tr>`;
+    }
+  }
+  html += `</tbody></table></div>`;
+
+  document.getElementById('reportContent').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SAVE / LOAD
+// ═══════════════════════════════════════════════════════════
+function saveState() {
+  try {
+    localStorage.setItem('wardRoster_v8', JSON.stringify({
+      staff: state.staff,
+      roster: state.roster,
+      leave: state.leave,
+      fortnight: state.fortnight,
+    }));
+  } catch(e) { console.error('Save failed:', e); }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('wardRoster_v8');
+    if (raw) {
+      const saved = JSON.parse(raw);
+      state.staff = saved.staff || DEFAULT_STAFF;
+      state.roster = saved.roster || {};
+      state.leave = saved.leave || {};
+      state.fortnight = saved.fortnight || 0;
+    } else {
+      state.staff = JSON.parse(JSON.stringify(DEFAULT_STAFF));
+    }
+  } catch(e) {
+    state.staff = JSON.parse(JSON.stringify(DEFAULT_STAFF));
+  }
+}
+
+function exportData() {
+  const data = { staff: state.staff, roster: state.roster, leave: state.leave, fortnight: state.fortnight };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `roster-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function importData(file) {
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const d = JSON.parse(e.target.result);
+      state.staff = d.staff || state.staff;
+      state.roster = d.roster || {};
+      state.leave = d.leave || {};
+      state.fortnight = d.fortnight || 0;
+      saveState();
+      renderAll();
+      alert('Imported successfully!');
+    } catch(err) { alert('Import failed: ' + err.message); }
+  };
+  r.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════════════════════
+function renderAll() {
+  renderRoster();
+  renderStaff();
+  renderLeave();
+  renderFTE();
+  renderReport();
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT & EVENT LISTENERS
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // Check session auth
+  if (sessionStorage.getItem('rosterAuth') === '1') {
+    document.getElementById('pinOverlay').style.display = 'none';
+  }
+
+  loadState();
+  renderAll();
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(x => x.style.display='none');
+      t.classList.add('active');
+      const id = t.dataset.tab;
+      document.getElementById(`tab-${id}`).style.display = '';
+      if (id === 'fte') renderFTE();
+      if (id === 'report') renderReport();
+      if (id === 'leave') renderLeave();
+    });
+  });
+
+  // Buttons
+  document.getElementById('btnAIFill').addEventListener('click', aiAutofill);
+  document.getElementById('btnFillLegacy').addEventListener('click', () => { if(confirm('Quick Fill will overwrite the current roster. Continue?')) quickFill(); });
+  document.getElementById('btnClear').addEventListener('click', () => { if(confirm('Clear all roster assignments?')) { state.roster={}; saveState(); renderRoster(); renderFTE(); } });
+  document.getElementById('btnExport').addEventListener('click', exportData);
+  document.getElementById('btnImport').addEventListener('click', () => document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', e => { if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
+  document.getElementById('btnPrint').addEventListener('click', () => window.print());
+  document.getElementById('btnTheme').addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    document.getElementById('btnTheme').textContent = next === 'dark' ? '🌙' : '☀️';
+  });
+  document.getElementById('btnPrevFn').addEventListener('click', () => { state.fortnight--; saveState(); renderAll(); });
+  document.getElementById('btnNextFn').addEventListener('click', () => { state.fortnight++; saveState(); renderAll(); });
+
+  // FTE view toggles
+  ['FN1','FN2','All'].forEach(v => {
+    document.getElementById(`btnFTE${v}`).addEventListener('click', () => {
+      state.fteView = v.toLowerCase();
+      document.querySelectorAll('[id^="btnFTE"]').forEach(b => b.classList.remove('active'));
+      document.getElementById(`btnFTE${v}`).classList.add('active');
+      renderFTE();
+    });
+  });
+
+  // Modal close
+  document.getElementById('cellModalClose').addEventListener('click', () => {
+    document.getElementById('cellModal').classList.remove('show');
+  });
+  document.getElementById('cellModalClear').addEventListener('click', () => {
+    if (!_cellContext) return;
+    const key = rKey(_cellContext.dayNum, _cellContext.shiftId, _cellContext.slotIdx);
+    delete state.roster[key];
+    saveState();
+    renderRoster();
+    renderFTE();
+    document.getElementById('cellModal').classList.remove('show');
+  });
+  document.getElementById('cellModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('cellModal')) document.getElementById('cellModal').classList.remove('show');
+  });
+
+  document.getElementById('btnClearLog').addEventListener('click', () => {
+    state.log = [];
+    document.getElementById('logBox').textContent = 'No log entries yet.';
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// PIN LOCK
+// ═══════════════════════════════════════════════════════════
+// PIN is stored as a SHA-256 hash. Default PIN: 1234
+// To change: run btoa(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('yourpin')))
+// then replace PIN_HASH below with the new value.
+const PIN_HASH = 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3'; // = "1234"
+
+let pinEntry = '';
+
+function pinPress(digit) {
+  if (pinEntry.length >= 4) return;
+  pinEntry += digit;
+  updatePinDots();
+  if (pinEntry.length === 4) setTimeout(checkPin, 150);
+}
+
+function pinClear() {
+  pinEntry = pinEntry.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pinError').textContent = '';
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('dot' + i).classList.toggle('filled', i < pinEntry.length);
+  }
+}
+
+async function checkPin() {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pinEntry);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+  if (hashHex === PIN_HASH) {
+    document.getElementById('pinOverlay').style.display = 'none';
+    sessionStorage.setItem('rosterAuth', '1');
+  } else {
+    document.getElementById('pinError').textContent = 'Incorrect PIN — try again';
+    pinEntry = '';
+    updatePinDots();
+    // Shake animation
+    const box = document.querySelector('.pin-box');
+    box.style.animation = 'none';
+    box.offsetHeight;
+    box.style.animation = 'shake .3s ease';
+  }
+}
+
+// Allow keyboard input on PIN screen
+document.addEventListener('keydown', e => {
+  if (document.getElementById('pinOverlay').style.display === 'none') return;
+  if (e.key >= '0' && e.key <= '9') pinPress(e.key);
+  if (e.key === 'Backspace') pinClear();
+});
+
+</script>
+</body>
+</html>
