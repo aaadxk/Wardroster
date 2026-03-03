@@ -749,60 +749,91 @@ async function aiAutofill() {
     }
   }
 
+  // Calculate current hours per staff to give AI accurate picture
+  const currentHours = {};
+  allStaff().forEach(s => {
+    currentHours[s.id] = {
+      fn1: calcHours(s.id, 1),
+      fn2: calcHours(s.id, 2),
+      total: calcHours(s.id, null),
+      targetFN1: getFteTarget(s, 1),
+      targetFN2: getFteTarget(s, 2),
+      targetTotal: s.fte,
+      remainingFN1: Math.max(0, getFteTarget(s, 1) - calcHours(s.id, 1)),
+      remainingFN2: Math.max(0, getFteTarget(s, 2) - calcHours(s.id, 2)),
+    };
+  });
+
   const prompt = `You are an expert hospital roster scheduler for Robina Hospital Transfer Unit.
+Your PRIMARY GOAL is to get every staff member as close to their FTE target hours as possible.
 
-FORTNIGHT: Days 0–13 (0=Mon FN1, 6=Sun FN1, 7=Mon FN2, 13=Sun FN2)
-Day types: Days 0,1,2,3,4 = Mon-Fri (FN1), Day 5,6 = Sat,Sun (FN1), Days 7,8,9,10,11 = Mon-Fri (FN2), Days 12,13 = Sat,Sun (FN2)
+FORTNIGHT STRUCTURE:
+- Days 0-4 = Mon-Fri Week 1 (FN1 weekdays)
+- Days 5-6 = Sat-Sun Week 1 (FN1 weekend)  
+- Days 7-11 = Mon-Fri Week 2 (FN2 weekdays)
+- Days 12-13 = Sat-Sun Week 2 (FN2 weekend)
 
-SHIFTS (weekdays only): EC(0600-1430,8h), E(0700-1530,8h), L(1100-1930,8h), AM(0700-1330,6h), LD(0830-1700,8h), EVE(1400-2200,8h)
-SHIFTS (weekends only): WD(0700-1530,8h), WA(1130-1930,8h), WN(1400-2200,8h)
+SHIFTS (weekdays Mon-Fri only):
+- EC: 0600-1430, 8h, slots: [0]=TeamLeader, [1]=RN/EN
+- E:  0700-1530, 8h, slots: [0]=TeamLeader, [1]=RN/EN, [2]=Shuttle/Flow
+- L:  1100-1930, 8h, slots: [0]=RN/EN
+- AM: 0700-1330, 6h, slots: [0]=ENShuttle
+- LD: 0830-1700, 8h, slots: [0]=RN/EN
+- EVE:1400-2200, 8h, slots: [0]=RN/EN
 
-SLOTS PER SHIFT:
-- EC: [0]=Team Leader, [1]=RN/EN
-- E: [0]=Team Leader, [1]=RN/EN, [2]=Shuttle/Flow
-- L: [0]=RN/EN
-- AM: [0]=EN Shuttle
-- LD: [0]=RN/EN
-- EVE: [0]=RN/EN
-- WD: [0]=Team Leader, [1]=RN/EN, [2]=RN/EN
-- WA: [0]=RN/EN
-- WN: [0]=RN/EN
+SHIFTS (weekends Sat-Sun only):
+- WD: 0700-1530, 8h, slots: [0]=TeamLeader, [1]=RN/EN, [2]=RN/EN
+- WA: 1130-1930, 8h, slots: [0]=RN/EN
+- WN: 1400-2200, 8h, slots: [0]=RN/EN
 
-CRITICAL RULES:
-1. ONE CN morning rule: only ONE CN can be Team Leader across EC AND E per day (not one each)
-2. CNs CANNOT work EVE (evening shift) on weekdays. CNs CAN work all weekend shifts.
-3. ENs can only fill EN Shuttle slots (AM[0]) and general RN/EN slots — NOT Team Leader slots
-4. Only staff with tl:true can fill Team Leader slots
-5. Only staff with enShuttle:true can fill EN Shuttle (AM) slots
-6. Only staff with shuttle:true or flow:true can fill Shuttle/Flow slots
-7. Max 3 consecutive EC or E shifts for any staff member
-8. Each staff works max 1 shift per day
-9. Target hours per FN: targetPerFN (half of fte). Do not exceed fte total.
-10. Prefer staff who need more hours (further from FTE target)
-11. Spread weekends fairly — each staff should get similar number of weekend days
-12. Staff on leave must not be scheduled
+HARD RULES (never break these):
+1. CNs CANNOT work EVE on weekdays — CNs can work all weekend shifts
+2. ONE CN morning rule: max 1 CN as TeamLeader across EC+E combined per day
+3. TeamLeader slots: only staff with tl=true
+4. ENShuttle slots (AM[0]): only staff with enShuttle=true
+5. Shuttle/Flow slots (E[2]): only staff with shuttle=true or flow=true
+6. ENs cannot fill TeamLeader slots
+7. Each staff works MAX 1 shift per day
+8. Staff on leave cannot work
+9. Max 3 consecutive EC or E shifts for any staff member
 
-STAFF:
-${JSON.stringify(staffSummary, null, 2)}
+FTE ENFORCEMENT (CRITICAL — this is the most important goal):
+- Each staff member has a target hours per FN1 and FN2
+- You MUST schedule each person enough shifts to hit their target
+- Prioritise staff with MORE remaining hours needed
+- Do NOT leave staff significantly under their target
+- It is better to assign more shifts than fewer
 
-LEAVE:
+STAFF WITH CURRENT HOURS AND TARGETS:
+${JSON.stringify(staffSummary.map(s => ({
+  ...s,
+  hoursThisFN1: currentHours[s.id].fn1,
+  hoursThisFN2: currentHours[s.id].fn2,
+  targetFN1: currentHours[s.id].targetFN1,
+  targetFN2: currentHours[s.id].targetFN2,
+  stillNeededFN1: currentHours[s.id].remainingFN1,
+  stillNeededFN2: currentHours[s.id].remainingFN2,
+})), null, 2)}
+
+LEAVE (these staff cannot work these days):
 ${JSON.stringify(leaveSummary, null, 2)}
 
-CURRENT PARTIAL ROSTER (already assigned — DO NOT overwrite these):
+ALREADY ASSIGNED (do NOT include these in your response):
 ${JSON.stringify(state.roster, null, 2)}
 
-Generate a COMPLETE roster assignment for ALL unfilled slots.
+INSTRUCTIONS:
+1. For each staff member, check their stillNeededFN1 and stillNeededFN2
+2. Assign them enough shifts in each FN to reach their target
+3. Fill ALL slots — do not leave empty slots if qualified staff are available
+4. Return ONLY new assignments not already in the roster above
 
-Return ONLY valid JSON with this structure:
+Return ONLY valid JSON, no other text:
 {
   "assignments": [
-    { "dayNum": 0, "shiftId": "EC", "slotIdx": 0, "staffId": "cn1" },
-    ...
+    { "dayNum": 0, "shiftId": "EC", "slotIdx": 0, "staffId": "cn1" }
   ],
-  "notes": "brief summary of any issues or decisions made"
-}
-
-Include only NEW assignments (not already in the current roster). Be thorough — fill every slot possible.`;
+  "notes": "summary of FTE achievement per staff member"
+}`;
 
   // Show AI panel
   document.getElementById('aiPanel').style.display = 'block';
@@ -919,9 +950,10 @@ function renderRoster() {
 
   for (const day of fn_.days) {
     const cls = day.isWeekend ? 'col-day-hdr weekend' : 'col-day-hdr';
-    const todayCls = day.isToday ? ' style="border-bottom:2px solid var(--acc)"' : '';
-    html += `<th class="${cls}"${todayCls}>
-      <div class="day-name">${day.dayName}</div>
+    const todayCls = day.isToday ? ' style="border-bottom:3px solid var(--acc);background:rgba(88,166,255,.08)"' : '';
+    const todayAttr = day.isToday ? ' data-today="true"' : '';
+    html += `<th class="${cls}"${todayCls}${todayAttr}>
+      <div class="day-name">${day.isToday ? '📍 '+day.dayName : day.dayName}</div>
       <div class="day-date">${day.dateStr}</div>
       <div class="day-fn">FN${day.fn}</div>
     </th>`;
@@ -1343,7 +1375,7 @@ function loadState() {
       state.staff = saved.staff || DEFAULT_STAFF;
       state.roster = saved.roster || {};
       state.leave = saved.leave || {};
-      state.fortnight = saved.fortnight || 0;
+      state.fortnight = 0; // Always start on current fortnight
     } else {
       state.staff = JSON.parse(JSON.stringify(DEFAULT_STAFF));
     }
@@ -1387,16 +1419,19 @@ function renderAll() {
   renderLeave();
   renderFTE();
   renderReport();
+  // Scroll today's column into view
+  setTimeout(() => {
+    const today = document.querySelector('.col-day-hdr[data-today="true"], th.today');
+    if (today) today.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
+  }, 100);
 }
 
 // ═══════════════════════════════════════════════════════════
 // INIT & EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  // Check session auth
-  if (sessionStorage.getItem('rosterAuth') === '1') {
-    document.getElementById('pinOverlay').style.display = 'none';
-  }
+  // Always show PIN on fresh page load
+  // sessionStorage only persists within the same tab — closing/reopening requires PIN again
 
   loadState();
   renderAll();
@@ -1471,7 +1506,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // PIN is stored as a SHA-256 hash. Default PIN: 1234
 // To change: run btoa(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('yourpin')))
 // then replace PIN_HASH below with the new value.
-const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // = "1234"
+const PIN_HASH = '295c4d1595596d3980b290fe876449463b8b87397cd13414fd6209a7ffe26eea'; // PIN
 
 let pinEntry = '';
 
