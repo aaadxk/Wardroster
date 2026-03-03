@@ -268,6 +268,7 @@ hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
     <span id="fnLabel" class="tag">Loading...</span>
     <button class="btn btn-sm" id="btnPrevFn">◀ FN</button>
     <button class="btn btn-sm" id="btnNextFn">FN ▶</button>
+    <button class="btn btn-sm" id="btnLoadOTS" style="background:var(--teal);color:#0d1117;border-color:var(--teal);font-weight:600">📋 Load OTS Roster</button>
     <button class="btn btn-ai" id="btnAIFill">✨ AI Autofill</button>
     <button class="btn btn-sm" id="btnFillLegacy">⚡ Quick Fill</button>
     <button class="btn btn-sm" id="btnClear">🗑 Clear</button>
@@ -407,6 +408,11 @@ const WEEKEND_SHIFTS = ['EE-TL','EE'];
 
 // CNs cannot do late shifts (LE, LE-TL, LA) on weekdays — CNs CAN do all weekend shifts
 const CN_FORBIDDEN_SHIFTS = ['LE','LE-TL','LA'];
+
+// ═══════════════════════════════════════════════════════════
+// PRELOADED ROSTER DATA (imported from OTS 16/03/2026-12/04/2026)
+// ═══════════════════════════════════════════════════════════
+const PRELOADED_ROSTERS = {"fn1":{"2|EJ|0":["cn2"],"3|EC-TL|0":["cn2"],"4|EC-TL|0":["cn2"],"5|EE-TL|0":["cn2"],"8|EG-PTS|0":["cn2"],"9|EC-TL|0":["cn2"],"10|E-TL|0":["cn2"],"11|EC-TL|0":["cn2"],"0|EC-TL|0":["cn3"],"1|E-TL|0":["cn3"],"2|EC-TL|0":["cn3"],"6|EE-TL|0":["cn3"],"7|E-TL|0":["cn3"],"8|EC-TL|0":["cn3"],"12|EE-TL|0":["cn3"],"13|EE-TL|0":["cn3"],"2|LE-TL|0":["rn1"],"3|LE-TL|0":["rn1"],"4|E|0":["rn1","en4"],"5|EE|0":["rn1","en2"],"8|EJ|0":["rn1"],"9|E|0":["rn1","rn3"],"10|LE-TL|0":["rn1"],"11|LE-TL|0":["rn1"],"0|E|0":["rn3","en4"],"1|E|0":["rn3"],"3|LE|0":["rn3"],"8|LE|0":["rn3"],"10|EC|0":["rn3"],"11|LE|0":["rn3"],"0|LE-TL|0":["rn4"],"1|LE-TL|0":["rn4"],"2|EG-PTS|0":["rn4"],"3|E|0":["rn4","en4"],"6|EE|0":["rn4","en4"],"7|LE-TL|0":["rn4"],"9|EG-PTS|0":["rn4"],"10|EG-PTS|0":["rn4"],"11|E|0":["rn4"],"0|LE|0":["rn5"],"1|EJ|0":["rn5"],"3|EG-PTS|0":["rn5"],"4|LE-TL|0":["rn5"],"7|EC|0":["rn5"],"8|E|0":["rn5","en5"],"9|LE-TL|0":["rn5"],"10|E|0":["rn5"],"13|EE|0":["rn5","en2"],"0|EG-PTS|0":["rn6"],"1|EG-PTS|0":["rn6"],"4|EG-PTS|0":["rn6"],"7|EG-PTS|0":["rn6"],"11|EG-PTS|0":["rn6"],"1|LE|0":["en1"],"2|EM-ESC|0":["en1"],"8|EM-ESC|0":["en1","en2"],"9|LE|0":["en1"],"2|LE|0":["en2"],"3|EM-ESC|0":["en2"],"4|EC-ESC|0":["en2","en5"],"9|EC-ESC|0":["en2"],"10|EM-ESC|0":["en2"],"11|EM-ESC|0":["en2"],"12|EE|0":["en2"],"0|EC-ESC|0":["en3"],"1|EC-ESC|0":["en3"],"2|E|0":["en3","en5"],"7|EM-ESC|0":["en3"],"10|EC-ESC|0":["en3"],"11|EC-ESC|0":["en3"],"2|EC-ESC|0":["en4"],"0|EM-ESC|0":["en5"],"1|EM-ESC|0":["en5"],"3|EC-ESC|0":["en5"],"7|EC-ESC|0":["en5"],"9|EM-ESC|0":["en5"],"10|LE|0":["en5"]},"fn2":{"0|E-TL|0":["cn2"],"1|EC-TL|0":["cn2"],"2|EG-PTS|0":["cn2"],"3|E-TL|0":["cn2"],"6|EE-TL|0":["cn2"],"7|EE-TL|0":["cn2"],"9|EG-PTS|0":["cn2"],"10|E-TL|0":["cn2"],"11|EC-TL|0":["cn2"],"2|E-TL|0":["cn3"],"3|EG-PTS|0":["cn3"],"4|EE-TL|0":["cn3"],"5|EE-TL|0":["cn3"],"8|E-TL|0":["cn3"],"9|E-TL|0":["cn3"],"10|EG-PTS|0":["cn3"],"11|EG-PTS|0":["cn3"],"0|EC|0":["rn1"],"1|E|0":["rn1","rn4"],"2|LE-TL|0":["rn1"],"3|E|0":["rn1"],"7|EE|0":["rn1","rn4"],"8|EG-PTS|0":["rn1"],"9|LE-TL|0":["rn1"],"10|EJ|0":["rn1"],"0|LE|0":["rn3"],"1|LA|0":["rn3"],"2|EJ|0":["rn3"],"8|EJ|0":["rn3"],"9|LE|0":["rn3"],"11|E|0":["rn3"],"13|EE|0":["rn3","en4"],"0|E|0":["rn4"],"3|LE-TL|0":["rn4"],"6|EE|0":["rn4","en2"],"8|LE-TL|0":["rn4"],"11|LE-TL|0":["rn4"],"12|EE-TL|0":["rn4"],"0|EG-PTS|0":["rn6"],"1|EG-PTS|0":["rn6"],"1|EM-ESC|0":["en1"],"2|EC-ESC|0":["en1"],"8|EC-ESC|0":["en1"],"9|EJ|0":["en1"],"2|LE|0":["en2"],"3|EM-ESC|0":["en2"],"4|EE|0":["en2","en3"],"5|EE|0":["en2","en5"],"9|EM-ESC|0":["en2"],"10|EM-ESC|0":["en2"],"11|EC-ESC|0":["en2"],"12|EE|0":["en2"],"0|EC-ESC|0":["en3"],"1|EC-ESC|0":["en3"],"8|EM-ESC|0":["en3"],"9|E|0":["en3"],"10|EC-ESC|0":["en3"],"2|LA|0":["en4"],"3|LE|0":["en4"],"8|LE|0":["en4"],"10|E|0":["en4"],"11|EM-ESC|0":["en4"],"0|EM-ESC|0":["en5"],"1|LE|0":["en5"],"2|EM-ESC|0":["en5"],"3|EC-ESC|0":["en5"],"8|E|0":["en5"],"9|EC-ESC|0":["en5"],"10|LE|0":["en5"],"11|LE|0":["en5"]},"fn1_start":"2026-03-16","fn2_start":"2026-03-30"};
 
 const DEFAULT_STAFF = [
   // CNs — all TL capable, shuttle capable
@@ -1436,13 +1442,45 @@ function loadState() {
       state.staff = saved.staff || DEFAULT_STAFF;
       state.roster = saved.roster || {};
       state.leave = saved.leave || {};
-      state.fortnight = 0; // Always start on current fortnight
+      state.fortnight = 0;
     } else {
+      // First load — use default staff and preloaded roster
       state.staff = JSON.parse(JSON.stringify(DEFAULT_STAFF));
+      state.roster = {};
+      state.leave = {};
+      state.fortnight = 0;
     }
   } catch(e) {
     state.staff = JSON.parse(JSON.stringify(DEFAULT_STAFF));
+    state.roster = {};
+    state.leave = {};
   }
+}
+
+// Determine which preloaded fortnight matches the current view
+function getPreloadedRoster() {
+  const fn_ = getFortnight(state.fortnight);
+  const startStr = fn_.start.toISOString().slice(0,10);
+  if (startStr === PRELOADED_ROSTERS.fn1_start) return PRELOADED_ROSTERS.fn1;
+  if (startStr === PRELOADED_ROSTERS.fn2_start) return PRELOADED_ROSTERS.fn2;
+  return null;
+}
+
+function loadPreloadedRoster() {
+  const preloaded = getPreloadedRoster();
+  if (!preloaded) {
+    alert('No preloaded roster available for this fortnight.\nThis tool has data for 16 Mar–29 Mar and 30 Mar–12 Apr 2026.');
+    return;
+  }
+  if (Object.keys(state.roster).length > 0) {
+    if (!confirm('This will replace the current roster with the imported OTS data. Continue?')) return;
+  }
+  state.roster = JSON.parse(JSON.stringify(preloaded));
+  saveState();
+  renderRoster();
+  renderFTE();
+  renderReport();
+  addLog('Loaded preloaded OTS roster for ' + getFortnight(state.fortnight).label, 'ok');
 }
 
 function exportData() {
@@ -1512,6 +1550,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Buttons
+  document.getElementById('btnLoadOTS').addEventListener('click', loadPreloadedRoster);
   document.getElementById('btnAIFill').addEventListener('click', aiAutofill);
   document.getElementById('btnFillLegacy').addEventListener('click', () => { if(confirm('Quick Fill will overwrite the current roster. Continue?')) quickFill(); });
   document.getElementById('btnClear').addEventListener('click', () => { if(confirm('Clear all roster assignments?')) { state.roster={}; saveState(); renderRoster(); renderFTE(); } });
