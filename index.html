@@ -812,7 +812,7 @@ Include only NEW assignments (not already in the current roster). Be thorough â€
 
   try {
     setAIStatus('AI is scheduling roster...');
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://wispy-sun-c99e.aaadxk.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
