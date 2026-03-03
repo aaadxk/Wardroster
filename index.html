@@ -384,25 +384,29 @@ hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
 // ═══════════════════════════════════════════════════════════
 
 const SHIFT_DEFS = {
-  EC: { name:'EC', label:'Early (6am)', time:'0600-1430', color:'#f0883e', hours:8, slots:['Team Leader','RN/EN'] },
-  E:  { name:'E',  label:'Early (7am)', time:'0700-1530', color:'#d29922', hours:8, slots:['Team Leader','RN/EN','Shuttle/Flow'] },
-  L:  { name:'L',  label:'Late',        time:'1100-1930', color:'#58a6ff', hours:8, slots:['RN/EN'] },
-  AM: { name:'AM', label:'AM',          time:'0700-1330', color:'#39d353', hours:6, slots:['EN Shuttle'] },
-  LD: { name:'LD', label:'Late Day',    time:'0830-1700', color:'#bc8cff', hours:8, slots:['RN/EN'] },
-  // Evening - CNs cannot do this
-  EVE:{ name:'EVE',label:'Evening',     time:'1400-2200', color:'#79c0ff', hours:8, slots:['RN/EN'] },
-  // Weekend
-  WD: { name:'WD', label:'Day (Wknd)',  time:'0700-1530', color:'#f0883e', hours:8, slots:['Team Leader','RN/EN','RN/EN'] },
-  WA: { name:'WA', label:'Aft (Wknd)', time:'1130-1930', color:'#58a6ff', hours:8, slots:['RN/EN'] },
-  WN: { name:'WN', label:'Eve (Wknd)', time:'1400-2200', color:'#79c0ff', hours:8, slots:['RN/EN'] },
+  // ── Weekday shifts ──────────────────────────────────────
+  'EC-TL':  { name:'EC-TL',  label:'Early TL',       time:'06:00-14:30', color:'#f0883e', hours:8,  slots:['Team Leader'] },
+  'EC':     { name:'EC',     label:'Early',           time:'06:00-14:30', color:'#ffa55a', hours:8,  slots:['RN/EN'] },
+  'EC-ESC': { name:'EC-ESC', label:'Early EN Shuttle',time:'06:00-14:30', color:'#56d364', hours:8,  slots:['EN Shuttle'] },
+  'E-TL':   { name:'E-TL',   label:'Early TL',        time:'07:00-15:30', color:'#d29922', hours:8,  slots:['Team Leader'] },
+  'E':      { name:'E',      label:'Early',           time:'07:00-15:30', color:'#e3b341', hours:8,  slots:['RN/EN'] },
+  'EG-PTS': { name:'EG-PTS', label:'Shuttle RN',      time:'08:30-17:00', color:'#bc8cff', hours:8,  slots:['Shuttle RN'] },
+  'EJ':     { name:'EJ',     label:'Flow Nurse',      time:'09:30-18:00', color:'#39d353', hours:8,  slots:['Flow Nurse'] },
+  'EM-ESC': { name:'EM-ESC', label:'Mid EN Shuttle',  time:'11:00-19:30', color:'#56d364', hours:8,  slots:['EN Shuttle'] },
+  'LA':     { name:'LA',     label:'Late A',          time:'12:00-20:30', color:'#58a6ff', hours:8,  slots:['RN/EN'] },
+  'LE-TL':  { name:'LE-TL',  label:'Late TL',         time:'13:00-21:30', color:'#79c0ff', hours:8,  slots:['Team Leader'] },
+  'LE':     { name:'LE',     label:'Late',            time:'13:00-21:30', color:'#388bfd', hours:8,  slots:['RN/EN'] },
+  // ── Weekend shifts ──────────────────────────────────────
+  'EE-TL':  { name:'EE-TL',  label:'Weekend Day TL',  time:'07:30-16:00', color:'#f0883e', hours:8,  slots:['Team Leader'] },
+  'EE':     { name:'EE',     label:'Weekend Day',     time:'07:30-16:00', color:'#ffa55a', hours:8,  slots:['RN/EN'] },
 };
 
 // Weekday = Mon–Fri shifts, Weekend = Sat/Sun shifts
-const WEEKDAY_SHIFTS = ['EC','E','L','AM','LD','EVE'];
-const WEEKEND_SHIFTS = ['WD','WA','WN'];
+const WEEKDAY_SHIFTS = ['EC-TL','EC','EC-ESC','E-TL','E','EG-PTS','EJ','EM-ESC','LA','LE-TL','LE'];
+const WEEKEND_SHIFTS = ['EE-TL','EE'];
 
-// CNs CANNOT work EVE (evening shift weekdays) - but CAN do weekend
-const CN_FORBIDDEN_SHIFTS = ['EVE'];
+// CNs cannot do late shifts (LE, LE-TL, LA) on weekdays — CNs CAN do all weekend shifts
+const CN_FORBIDDEN_SHIFTS = ['LE','LE-TL','LA'];
 
 const DEFAULT_STAFF = [
   // CNs — all TL capable, shuttle capable
@@ -554,17 +558,21 @@ function canWorkShift(staff, shiftId) {
 function canFillSlot(staff, shiftId, slotLabel) {
   if (!canWorkShift(staff, shiftId)) return false;
   const sl = slotLabel.toLowerCase();
-  if (sl.includes('team leader') || sl.includes('tl')) {
-    return staff.tl === true;
+  if (sl === 'team leader') {
+    // Only TL-capable staff; ENs cannot be TL
+    return staff.tl === true && staff.role !== 'EN';
   }
-  if (sl.includes('en shuttle')) {
+  if (sl === 'en shuttle') {
     return staff.enShuttle === true;
   }
-  if (sl.includes('shuttle')) {
-    return staff.shuttle === true;
+  if (sl === 'shuttle rn') {
+    return staff.shuttle === true && staff.role !== 'EN';
   }
-  if (sl.includes('flow')) {
-    return staff.flow === true || staff.shuttle === true;
+  if (sl === 'flow nurse') {
+    return staff.flow === true;
+  }
+  if (sl === 'rn/en') {
+    return true; // Any role can fill general slots
   }
   return true;
 }
@@ -576,7 +584,7 @@ function maxConsecutiveEarlies(staffId, dayNum, fn_) {
     const day = fn_.days[d];
     if (!day || day.isWeekend) break;
     let hadEarly = false;
-    for (const shiftId of ['EC','E']) {
+    for (const shiftId of ['EC-TL','EC','E-TL','E']) {
       const def = SHIFT_DEFS[shiftId];
       for (let si = 0; si < def.slots.length; si++) {
         if ((state.roster[rKey(d, shiftId, si)]||[]).includes(staffId)) { hadEarly = true; break; }
@@ -658,7 +666,7 @@ function quickFill() {
         const key = rKey(day.dayNum, shiftId, si);
 
         // One CN morning rule: EC TL and E TL share the same CN
-        if ((shiftId === 'EC' || shiftId === 'E') && slotLabel.toLowerCase().includes('team leader')) {
+        if ((shiftId === 'EC-TL' || shiftId === 'E-TL') && slotLabel.toLowerCase().includes('team leader')) {
           if (cnMorningAssigned) {
             // Skip — re-use same TL concept (TL slot left empty or use RN TL)
             const rnTL = getBestCandidates(day.dayNum, shiftId, slotLabel, 'RN', []).find(s => s.role==='RN' && s.tl);
@@ -774,21 +782,25 @@ FORTNIGHT STRUCTURE:
 - Days 12-13 = Sat-Sun Week 2 (FN2 weekend)
 
 SHIFTS (weekdays Mon-Fri only):
-- EC: 0600-1430, 8h, slots: [0]=TeamLeader, [1]=RN/EN
-- E:  0700-1530, 8h, slots: [0]=TeamLeader, [1]=RN/EN, [2]=Shuttle/Flow
-- L:  1100-1930, 8h, slots: [0]=RN/EN
-- AM: 0700-1330, 6h, slots: [0]=ENShuttle
-- LD: 0830-1700, 8h, slots: [0]=RN/EN
-- EVE:1400-2200, 8h, slots: [0]=RN/EN
+- EC-TL:  06:00-14:30, 8h, slots: [0]=Team Leader (CN/RN TL only)
+- EC:     06:00-14:30, 8h, slots: [0]=RN/EN
+- EC-ESC: 06:00-14:30, 8h, slots: [0]=EN Shuttle (enShuttle=true only)
+- E-TL:   07:00-15:30, 8h, slots: [0]=Team Leader (CN/RN TL only)
+- E:      07:00-15:30, 8h, slots: [0]=RN/EN
+- EG-PTS: 08:30-17:00, 8h, slots: [0]=Shuttle RN (shuttle=true, not EN)
+- EJ:     09:30-18:00, 8h, slots: [0]=Flow Nurse (flow=true only)
+- EM-ESC: 11:00-19:30, 8h, slots: [0]=EN Shuttle (enShuttle=true only)
+- LA:     12:00-20:30, 8h, slots: [0]=RN/EN
+- LE-TL:  13:00-21:30, 8h, slots: [0]=Team Leader (RN TL only — CNs cannot do late)
+- LE:     13:00-21:30, 8h, slots: [0]=RN/EN
 
 SHIFTS (weekends Sat-Sun only):
-- WD: 0700-1530, 8h, slots: [0]=TeamLeader, [1]=RN/EN, [2]=RN/EN
-- WA: 1130-1930, 8h, slots: [0]=RN/EN
-- WN: 1400-2200, 8h, slots: [0]=RN/EN
+- EE-TL: 07:30-16:00, 8h, slots: [0]=Team Leader (CN/RN TL)
+- EE:    07:30-16:00, 8h, slots: [0]=RN/EN
 
 HARD RULES (never break these):
-1. CNs CANNOT work EVE on weekdays — CNs can work all weekend shifts
-2. ONE CN morning rule: max 1 CN as TeamLeader across EC+E combined per day
+1. CNs CANNOT work LE, LE-TL, or LA (late shifts) on weekdays — CNs CAN work all weekend shifts
+2. ONE CN morning rule: max 1 CN as TeamLeader across EC-TL and E-TL combined per day
 3. TeamLeader slots: only staff with tl=true
 4. ENShuttle slots (AM[0]): only staff with enShuttle=true
 5. Shuttle/Flow slots (E[2]): only staff with shuttle=true or flow=true
@@ -1182,20 +1194,64 @@ function deleteStaff(id) {
 // ═══════════════════════════════════════════════════════════
 function renderLeave() {
   const fn_ = getFortnight(state.fortnight);
-  let html = '';
+  
+  // Build header row with day labels
+  let html = `<div style="overflow-x:auto">
+  <table style="border-collapse:collapse;width:100%;font-size:12px">
+  <thead>
+    <tr>
+      <th style="text-align:left;padding:6px 10px;background:var(--bg3);border:1px solid var(--bdr);min-width:140px;position:sticky;left:0;z-index:2">Staff</th>`;
+  
+  for (const day of fn_.days) {
+    const wknd = day.isWeekend ? 'color:var(--org)' : '';
+    const todayStyle = day.isToday ? 'background:rgba(88,166,255,.1);' : '';
+    html += `<th style="text-align:center;padding:4px 2px;background:var(--bg3);border:1px solid var(--bdr);min-width:44px;${wknd}${todayStyle}">
+      <div style="font-weight:700">${day.dayName}</div>
+      <div style="font-size:10px;opacity:.7">${day.dateStr}</div>
+    </th>`;
+  }
+  html += `</tr></thead><tbody>`;
+
   for (const s of allStaff()) {
-    html += `<div class="leave-card">
-      <div class="leave-staff">${s.name} <span class="role-badge ${s.role}" style="font-size:9px">${s.role}</span></div>
-      <div class="leave-days">`;
+    const roleCol = s.role === 'CN' ? 'var(--cn)' : s.role === 'RN' ? 'var(--rn)' : 'var(--en)';
+    html += `<tr>
+      <td style="padding:5px 10px;border:1px solid var(--bdr);background:var(--bg2);position:sticky;left:0;z-index:1;white-space:nowrap">
+        <span style="color:${roleCol};font-weight:600;font-size:11px">${s.role}</span>
+        <span style="margin-left:5px">${s.name}</span>
+      </td>`;
+    
     for (const day of fn_.days) {
       const key = leaveKey(s.id, day.dayNum);
-      const state_ = state.leave[key] || '';
-      const cls = state_ === 'leave' ? 'leave' : state_ === 'red' ? 'red' : '';
-      html += `<button class="leave-day-btn ${cls}" onclick="toggleLeave('${s.id}',${day.dayNum})"
-        title="${state_||'Available'}">${day.dayName[0]}${day.dateStr.split('/')[0]}</button>`;
+      const val = state.leave[key] || '';
+      const todayStyle = day.isToday ? 'background:rgba(88,166,255,.06);' : '';
+      
+      let cellContent = '';
+      let cellStyle = `padding:2px;border:1px solid var(--bdr);text-align:center;cursor:pointer;${todayStyle}`;
+      
+      if (val === 'leave') {
+        cellStyle += 'background:rgba(248,81,73,.15);';
+        cellContent = `<span style="color:var(--red);font-size:10px;font-weight:700">AL</span>`;
+      } else if (val === 'red') {
+        cellStyle += 'background:rgba(210,153,34,.2);';
+        cellContent = `<span style="color:var(--org);font-size:10px;font-weight:700">RD</span>`;
+      } else {
+        cellContent = `<span style="color:var(--txt3);font-size:10px">·</span>`;
+      }
+      
+      html += `<td style="${cellStyle}" onclick="toggleLeave('${s.id}',${day.dayNum})" title="Click to toggle: Available → Annual Leave → RDO → Available">${cellContent}</td>`;
     }
-    html += `</div></div>`;
+    html += `</tr>`;
   }
+
+  html += `</tbody></table></div>
+  <div style="margin-top:10px;font-size:11px;color:var(--txt2);display:flex;gap:16px;align-items:center">
+    <span>Click any cell to toggle:</span>
+    <span style="background:rgba(248,81,73,.15);color:var(--red);padding:2px 8px;border-radius:4px;font-weight:700">AL = Annual Leave</span>
+    <span style="background:rgba(210,153,34,.2);color:var(--org);padding:2px 8px;border-radius:4px;font-weight:700">RD = RDO / RED Day</span>
+    <span style="color:var(--txt3)">· = Available</span>
+    <span style="color:var(--txt2)">(Max 3 RDOs per week)</span>
+  </div>`;
+
   document.getElementById('leaveGrid').innerHTML = html;
 }
 
@@ -1205,11 +1261,13 @@ function toggleLeave(staffId, dayNum) {
   if (!cur) {
     state.leave[key] = 'leave';
   } else if (cur === 'leave') {
-    // Check RED limit
+    // Check RDO limit — max 3 per week
     const fn_ = getFortnight(state.fortnight);
     const day = fn_.days[dayNum];
-    const redCount = fn_.days.filter(d => d.fn === day.fn).filter(d => state.leave[leaveKey(staffId, d.dayNum)] === 'red').length;
-    if (redCount >= 3) { alert('Max 3 RED days per fortnight'); return; }
+    const weekStart = day.fn === 1 ? 0 : 7;
+    const weekEnd = weekStart + 6;
+    const rdoCount = fn_.days.filter(d => d.dayNum >= weekStart && d.dayNum <= weekEnd).filter(d => state.leave[leaveKey(staffId, d.dayNum)] === 'red').length;
+    if (rdoCount >= 3) { alert('Max 3 RDO days per week'); return; }
     state.leave[key] = 'red';
   } else {
     delete state.leave[key];
@@ -1309,9 +1367,9 @@ function renderReport() {
       <thead><tr><th>Day</th><th>EC TL</th><th>E TL</th><th>Rule OK</th></tr></thead><tbody>`;
 
   for (const day of fn_.days.filter(d => !d.isWeekend)) {
-    const ecTL = (state.roster[rKey(day.dayNum,'EC',0)]||[]).map(id => getStaff(id)?.name||id);
-    const eTL  = (state.roster[rKey(day.dayNum,'E',0)]||[]).map(id => getStaff(id)?.name||id);
-    const allTLids = [...(state.roster[rKey(day.dayNum,'EC',0)]||[]), ...(state.roster[rKey(day.dayNum,'E',0)]||[])];
+    const ecTL = (state.roster[rKey(day.dayNum,'EC-TL',0)]||[]).map(id => getStaff(id)?.name||id);
+    const eTL  = (state.roster[rKey(day.dayNum,'E-TL',0)]||[]).map(id => getStaff(id)?.name||id);
+    const allTLids = [...(state.roster[rKey(day.dayNum,'EC-TL',0)]||[]), ...(state.roster[rKey(day.dayNum,'E-TL',0)]||[])];
     const cnCount = allTLids.filter(id => getStaff(id)?.role === 'CN').length;
     const ok = cnCount <= 1;
     html += `<tr>
@@ -1325,17 +1383,20 @@ function renderReport() {
 
   // CN evening audit
   html += `<div class="report-section">
-    <div class="report-title">CN No-EVE Rule Audit</div>
+    <div class="report-title">CN No-Late Rule Audit (CNs cannot work LE/LE-TL/LA)</div>
     <table class="report-table">
       <thead><tr><th>Day</th><th>EVE Assigned</th><th>CN in EVE?</th><th>Rule OK</th></tr></thead><tbody>`;
 
   for (const day of fn_.days.filter(d => !d.isWeekend)) {
-    const eveDef = SHIFT_DEFS['EVE'];
+    const lateShifts = ['LE-TL','LE','LA'];
     const eveStaff = [];
-    for (let si = 0; si < eveDef.slots.length; si++) {
-      (state.roster[rKey(day.dayNum,'EVE',si)]||[]).forEach(id => {
-        const s = getStaff(id); if (s) eveStaff.push(s);
-      });
+    for (const lsh of lateShifts) {
+      const def = SHIFT_DEFS[lsh]; if (!def) continue;
+      for (let si = 0; si < def.slots.length; si++) {
+        (state.roster[rKey(day.dayNum,lsh,si)]||[]).forEach(id => {
+          const s = getStaff(id); if (s) eveStaff.push({...s, shift:lsh});
+        });
+      }
     }
     const cnInEve = eveStaff.filter(s => s.role === 'CN');
     const ok = cnInEve.length === 0;
@@ -1358,7 +1419,7 @@ function renderReport() {
 // ═══════════════════════════════════════════════════════════
 function saveState() {
   try {
-    localStorage.setItem('wardRoster_v8', JSON.stringify({
+    localStorage.setItem('wardRoster_v8_2', JSON.stringify({
       staff: state.staff,
       roster: state.roster,
       leave: state.leave,
@@ -1369,7 +1430,7 @@ function saveState() {
 
 function loadState() {
   try {
-    const raw = localStorage.getItem('wardRoster_v8');
+    const raw = localStorage.getItem('wardRoster_v8_2');
     if (raw) {
       const saved = JSON.parse(raw);
       state.staff = saved.staff || DEFAULT_STAFF;
