@@ -407,15 +407,13 @@ const CN_FORBIDDEN_WEEKDAY = ['LA','EM-ESC','LE-TL','LE'];
 // CNs: tl=true, shuttle=true, flow=true — all shifts except late (LA/LE/EM-ESC)
 // RNs: tl varies, shuttle/flow=true — all shifts except EN Shuttle
 // ENs: flow=true, enShuttle=true — floor + EN shuttle
-// NOTE: Row 6 in OTS has a second 'Adam Krenske' (PAN 00374868) as RN — kept as 'Adam K (RN)' pending clarification
 const DEFAULT_STAFF = [
   // CNs
   { id:'cn1', role:'CN', name:'Denise Endres',            fte:96,  tl:true,  shuttle:true, flow:true, enShuttle:false },
   { id:'cn2', role:'CN', name:'Stephanie Field',          fte:128, tl:true,  shuttle:true, flow:true, enShuttle:false },
-  { id:'cn3', role:'CN', name:'Adam Krenske',             fte:48,  tl:true,  shuttle:true, flow:true, enShuttle:false },
+  { id:'cn3', role:'CN', name:'Adam Krenske',             fte:128, tl:true,  shuttle:true, flow:true, enShuttle:false },
   // RNs
   { id:'rn5', role:'RN', name:'Alison McCarthy',          fte:128, tl:true,  shuttle:true, flow:true, enShuttle:false },
-  { id:'rn6', role:'RN', name:'Adam K (RN)',              fte:80,  tl:false, shuttle:true, flow:true, enShuttle:false },
   { id:'rn7', role:'RN', name:'Arathi Nedunilath Xavier', fte:96,  tl:true,  shuttle:true, flow:true, enShuttle:false },
   { id:'rn8', role:'RN', name:'Lani Hogan',               fte:112, tl:false, shuttle:true, flow:true, enShuttle:false },
   { id:'rn9', role:'RN', name:'Natasha Roberts',          fte:128, tl:true,  shuttle:true, flow:true, enShuttle:false },
@@ -438,7 +436,7 @@ let state = {
   roster: {},        // key: "dayNum|shiftId|slotIdx" => staffId[]
   leave: {},         // key: "staffId|dayNum" => "leave"|"red"|null
   log: [],
-  fteView: 'fn2',    // fn1, fn2, all
+  fteView: 'all',   // fn1, fn2, all
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -878,7 +876,7 @@ Fill every possible shift slot. Be thorough. Prioritise FTE compliance above all
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
+        max_tokens: 8000,
         system: 'You are a hospital roster scheduling assistant. You MUST respond with ONLY raw JSON — no markdown, no backticks, no explanation. Start your response with { and end with }.',
         messages: [{ role: 'user', content: promptText }]
       })
@@ -938,11 +936,54 @@ Fill every possible shift slot. Be thorough. Prioritise FTE compliance above all
     const fn1Days = fn_.days.filter(d=>d.fn===1).map(d=>d.dayNum);
     const fn2Days = fn_.days.filter(d=>d.fn===2).map(d=>d.dayNum);
 
-    const makeFnPrompt = (fnNum, days) =>
-      prompt.replace(
-        `Schedule the ${periodStart} 28-day pay period (days 0–27).`,
-        `Schedule FORTNIGHT ${fnNum} ONLY (days ${days[0]}–${days[days.length-1]}) of the ${periodStart} pay period. Only output assignments for days ${days[0]}–${days[days.length-1]}.`
-      );
+    const makeFnPrompt = (fnNum, days) => {
+      const fnDayObjs = fn_.days.filter(d=>d.fn===fnNum);
+      const fnLeave = leaveSummary.filter(l=>days.includes(l.day));
+      const fnRoster = {};
+      for (const [k,v] of Object.entries(state.roster)) {
+        const dayNum = parseInt(k.split('|')[0]);
+        if (days.includes(dayNum)) fnRoster[k] = v;
+      }
+      // Hours already worked this period (across both FNs) for FTE context
+      const hoursWorked = {};
+      for (const s of allStaff()) hoursWorked[s.id] = calcHours(s.id, null);
+
+      return `You are a hospital roster scheduler. Respond with ONLY raw JSON, no markdown.
+
+SCHEDULE FORTNIGHT ${fnNum} ONLY — days ${days[0]}–${days[days.length-1]} of the ${periodStart} pay period.
+
+DAYS:
+${fnDayObjs.map(d=>`Day ${d.dayNum}: ${d.dayName} ${d.dateStr} (${d.isWeekend?'WEEKEND':'weekday'})`).join('\n')}
+
+SHIFTS:
+Weekday: EC-TL(0600,8h,CN/RN TL), EC(0600,8h,RN/EN), EC-ESC(0600,8h,EN), E-TL(0700,8h,CN/RN TL), E(0700,8h,RN/EN), EG-PTS(0830,8h,RN shuttle), EJ(0930,8h,flow), LA(1200,8h,RN/EN late), EM-ESC(1100,8h,EN late), LE-TL(1300,8h,RN TL), LE(1300,8h,RN/EN)
+Weekend: EE-TL(0730,8h,CN/RN TL), EE(0730,8h,RN/EN)
+Special: MGT(0700,8h,CN only — 1 per CN per 28-day period)
+
+RULES:
+- CNs: EC-TL,EC,E-TL,E,EG-PTS,EJ,EE-TL,EE,MGT only (NO late shifts)
+- RNs: all except EC-ESC,EM-ESC,MGT
+- ENs: EC-ESC,EC,E,EM-ESC,LA,LE,EE only
+- TL shifts: only tl:true staff
+- EG-PTS: shuttle:true only; EJ: flow:true only; EC-ESC/EM-ESC: enShuttle:true only
+- Max 1 TL per morning block (EC-TL or E-TL) per day; max 1 LE-TL per day
+- Max 1 shift per staff per day
+- Do not assign staff on leave/RDO
+- Each CN needs exactly 1 MGT day per 28-day period (check mgtDaysAssigned)
+- Prioritise FTE: staff with most hoursRemaining get priority
+
+STAFF:
+${JSON.stringify(staffSummary.map(s=>({...s, hoursWorked: hoursWorked[s.id]})), null, 1)}
+
+LEAVE/RDO THIS FORTNIGHT:
+${JSON.stringify(fnLeave)}
+
+EXISTING ASSIGNMENTS (do not overwrite):
+${JSON.stringify(fnRoster)}
+
+OUTPUT FORMAT — ONLY this JSON:
+{"assignments":[{"dayNum":0,"shiftId":"EC-TL","slotIdx":0,"staffId":"cn2"},...], "notes":"brief summary"}`;
+    };
 
     addLog('Calling AI for FN1 (days 0–13)...', 'ai');
     const parsed1 = await callWorker(makeFnPrompt(1, fn1Days), 'Scheduling FN1 (days 0–13)...');
@@ -1372,7 +1413,7 @@ function renderStaffCard(s) {
     </div>
     <div class="staff-fields">
       <div class="field-group">
-        <label class="field-label">FTE Hrs (per FN × 2)</label>
+        <label class="field-label">FTE Hrs (28-day total)</label>
         <input class="field-input" type="number" min="8" max="76" step="0.5" value="${s.fte}"
           onchange="updateStaff('${s.id}','fte',parseFloat(this.value))">
       </div>
@@ -1405,7 +1446,7 @@ function updateStaff(id, field, value) {
 
 function addStaff(role) {
   const id = 'staff_' + Date.now();
-  state.staff.push({ id, role, name:'', fte:38, tl:role!=='EN', shuttle:role!=='EN', flow:false, enShuttle:role==='EN' });
+  state.staff.push({ id, role, name:'', fte:64, tl:role!=='EN', shuttle:role!=='EN', flow:false, enShuttle:role==='EN' });
   saveState();
   renderStaff();
 }
@@ -1651,7 +1692,7 @@ function renderReport() {
 // ═══════════════════════════════════════════════════════════
 function saveState() {
   try {
-    localStorage.setItem('wardRoster_v8', JSON.stringify({
+    localStorage.setItem('wardRoster_v10', JSON.stringify({
       staff: state.staff,
       roster: state.roster,
       leave: state.leave,
@@ -1662,7 +1703,7 @@ function saveState() {
 
 function loadState() {
   try {
-    const raw = localStorage.getItem('wardRoster_v8');
+    const raw = localStorage.getItem('wardRoster_v10');
     if (raw) {
       const saved = JSON.parse(raw);
       state.staff = saved.staff || DEFAULT_STAFF;
