@@ -239,6 +239,7 @@ hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
     <button class="btn btn-sm" id="btnPrevFn">◀ FN</button>
     <button class="btn btn-sm" id="btnNextFn">FN ▶</button>
     <button class="btn btn-ai" id="btnAIFill">✨ AI Autofill</button>
+    <button class="btn btn-sm" id="btnTestWorker" title="Test Cloudflare Worker connection">🔌 Test API</button>
     <button class="btn btn-sm" id="btnClear">🗑 Clear</button>
     <button class="btn btn-sm" id="btnExport">📥 Export</button>
     <button class="btn btn-sm" id="btnImport">📤 Import</button>
@@ -1717,6 +1718,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Buttons
   document.getElementById('btnAIFill').addEventListener('click', aiAutofill);
+  document.getElementById('btnTestWorker').addEventListener('click', async () => {
+    const btn = document.getElementById('btnTestWorker');
+    btn.textContent = '⏳ Testing...';
+    btn.disabled = true;
+    try {
+      const res = await fetch('https://wispy-sun-c99e.aaadxk.workers.dev', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'Reply with just: ok' }]
+        })
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert('Worker reachable but API error:\n' + (data.error.message || JSON.stringify(data.error)));
+      } else if (data.content) {
+        alert('✅ Worker is working!\nModel replied: ' + (data.content[0]?.text || 'ok'));
+      } else {
+        alert('Worker responded but unexpected format:\n' + JSON.stringify(data).slice(0,200));
+      }
+    } catch(err) {
+      alert('❌ Cannot reach worker:\n' + err.message + '\n\nCheck:\n1. Worker is deployed on Cloudflare\n2. ANTHROPIC_API_KEY env variable is set\n3. Worker URL is correct');
+    }
+    btn.textContent = '🔌 Test API';
+    btn.disabled = false;
+  });
   document.getElementById('btnClear').addEventListener('click', () => { if(confirm('Clear all roster assignments?')) { state.roster={}; saveState(); renderRoster(); renderFTE(); } });
   document.getElementById('btnExport').addEventListener('click', exportData);
   document.getElementById('btnImport').addEventListener('click', () => document.getElementById('importFile').click());
