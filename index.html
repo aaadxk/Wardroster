@@ -255,6 +255,18 @@ hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
     <div class="pin-error" id="pinError"></div>
   </div>
 </div>
+
+<!-- ASSIGN SHIFT MODAL -->
+<div class="overlay" id="assignModal">
+  <div class="modal" style="max-width:300px">
+    <div class="modal-title" id="assignModalTitle">Assign Shift</div>
+    <div class="modal-body" id="assignModalBody" style="max-height:360px;overflow-y:auto;padding:6px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-sm" onclick="closeModal('assignModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="app">
 <!-- HEADER -->
 <header class="hdr">
@@ -268,7 +280,6 @@ hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
     <span id="fnLabel" class="tag">Loading...</span>
     <button class="btn btn-sm" id="btnPrevFn">◀ FN</button>
     <button class="btn btn-sm" id="btnNextFn">FN ▶</button>
-    <button class="btn btn-sm" id="btnLoadOTS" style="background:var(--teal);color:#0d1117;border-color:var(--teal);font-weight:600">📋 Load OTS Roster</button>
     <button class="btn btn-ai" id="btnAIFill">✨ AI Autofill</button>
     <button class="btn btn-sm" id="btnFillLegacy">⚡ Quick Fill</button>
     <button class="btn btn-sm" id="btnClear">🗑 Clear</button>
@@ -450,23 +461,19 @@ let state = {
 // DATE HELPERS
 // ═══════════════════════════════════════════════════════════
 function getFortnight(offset=0) {
+  // Returns a full 28-day pay period anchored to 16 Mar 2026
   const now = new Date();
-  // Find Monday of current week
-  const dow = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
-  monday.setHours(0,0,0,0);
-  // Add offset fortnights
-  monday.setDate(monday.getDate() + offset * 14);
-  // Find the fortnight start (Monday on or before monday, in 14-day cycles from epoch)
-  const epoch = new Date('2024-01-01'); // Monday
-  const daysSinceEpoch = Math.floor((monday - epoch) / 86400000);
-  const fnStart = new Date(epoch);
-  fnStart.setDate(epoch.getDate() + Math.floor(daysSinceEpoch / 14) * 14);
+  const ANCHOR = new Date('2026-03-16T00:00:00');
+  const msPerDay = 86400000;
+  const daysSinceAnchor = Math.floor((now - ANCHOR) / msPerDay);
+  const currentPeriod = Math.floor(daysSinceAnchor / 28);
+  const targetPeriod = currentPeriod + offset;
+  const periodStart = new Date(ANCHOR);
+  periodStart.setDate(ANCHOR.getDate() + targetPeriod * 28);
   const days = [];
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(fnStart);
-    d.setDate(fnStart.getDate() + i);
+  for (let i = 0; i < 28; i++) {
+    const d = new Date(periodStart);
+    d.setDate(periodStart.getDate() + i);
     const dow2 = d.getDay();
     days.push({
       date: d,
@@ -474,11 +481,14 @@ function getFortnight(offset=0) {
       dayName: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow2],
       dateStr: d.toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit'}),
       isWeekend: dow2 === 0 || dow2 === 6,
-      fn: i < 7 ? 1 : 2,
+      fn: i < 14 ? 1 : 2,
+      week: Math.floor(i / 7) + 1,
       isToday: d.toDateString() === now.toDateString(),
     });
   }
-  return { days, start:fnStart, label:`FN ${fnStart.toLocaleDateString('en-AU',{day:'2-digit',month:'short'})} – ${days[13].date.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'2-digit'})}` };
+  const label = periodStart.toLocaleDateString('en-AU',{day:'2-digit',month:'short'})
+    + ' – ' + days[27].date.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'2-digit'});
+  return { days, start:periodStart, label };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -963,65 +973,96 @@ function renderRoster() {
   const fn_ = getFortnight(state.fortnight);
   document.getElementById('fnLabel').textContent = fn_.label;
 
-  let html = `<div class="grid-wrap"><table class="roster"><thead><tr>
-    <th class="col-shift" style="position:sticky;top:0;left:0;z-index:4;background:var(--bg3)">Shift / Slot</th>`;
+  // ── Week header row ──────────────────────────────────────
+  let html = `<div class="grid-wrap"><table class="roster" style="font-size:11px">
+  <thead>
+    <tr>
+      <th style="position:sticky;top:0;left:0;z-index:5;background:var(--bg3);min-width:130px;padding:4px 8px;text-align:left;border:1px solid var(--bdr)">Staff</th>
+      <th style="position:sticky;top:0;left:0;z-index:5;background:var(--bg3);min-width:52px;padding:4px 4px;text-align:center;border:1px solid var(--bdr)">FTE</th>`;
 
+  // Week group headers
+  const weekLabels = ['WEEK 1','WEEK 2','WEEK 3','WEEK 4'];
+  for (let w = 0; w < 4; w++) {
+    const weekDays = fn_.days.filter(d => d.week === w+1);
+    html += `<th colspan="${weekDays.length}" style="position:sticky;top:0;z-index:4;background:var(--bg4);border:1px solid var(--bdr);text-align:center;padding:3px;font-size:10px;color:var(--txt2);letter-spacing:.5px">${weekLabels[w]}</th>`;
+  }
+  html += '</tr><tr>';
+  html += `<th style="position:sticky;top:24px;left:0;z-index:5;background:var(--bg3);border:1px solid var(--bdr);padding:3px 8px;font-size:10px;color:var(--txt2)">Name</th>`;
+  html += `<th style="position:sticky;top:24px;z-index:4;background:var(--bg3);border:1px solid var(--bdr);padding:3px;text-align:center;font-size:10px;color:var(--txt2)">Hrs</th>`;
+
+  // Day headers
   for (const day of fn_.days) {
-    const cls = day.isWeekend ? 'col-day-hdr weekend' : 'col-day-hdr';
-    const todayCls = day.isToday ? ' style="border-bottom:3px solid var(--acc);background:rgba(88,166,255,.08)"' : '';
-    const todayAttr = day.isToday ? ' data-today="true"' : '';
-    html += `<th class="${cls}"${todayCls}${todayAttr}>
-      <div class="day-name">${day.isToday ? '📍 '+day.dayName : day.dayName}</div>
-      <div class="day-date">${day.dateStr}</div>
-      <div class="day-fn">FN${day.fn}</div>
+    const wknd = day.isWeekend;
+    const todayStyle = day.isToday ? 'border-bottom:3px solid var(--acc);background:rgba(88,166,255,.1);' : '';
+    const wkndStyle = wknd ? 'background:rgba(210,153,34,.07);color:var(--org);' : '';
+    html += `<th ${day.isToday ? 'data-today="true"' : ''} style="position:sticky;top:24px;z-index:4;min-width:38px;max-width:42px;padding:3px 2px;text-align:center;border:1px solid var(--bdr);${wkndStyle}${todayStyle}">
+      <div style="font-weight:700;font-size:10px">${day.dayName.slice(0,2)}</div>
+      <div style="font-size:9px;opacity:.8">${day.dateStr}</div>
     </th>`;
   }
   html += '</tr></thead><tbody>';
 
-  // Render each shift/slot as its own row
-  const allShifts = [...WEEKDAY_SHIFTS.map(id=>({id,weekend:false})), ...WEEKEND_SHIFTS.map(id=>({id,weekend:true}))];
+  // ── Staff rows ───────────────────────────────────────────
+  for (const role of ['CN','RN','EN']) {
+    const group = state.staff.filter(s => s.role === role && s.name.trim());
+    if (!group.length) continue;
+    const roleCol = role === 'CN' ? 'var(--cn)' : role === 'RN' ? 'var(--rn)' : 'var(--en)';
 
-  for (const { id: shiftId, weekend: isWkndShift } of allShifts) {
-    const def = SHIFT_DEFS[shiftId];
-    for (let si = 0; si < def.slots.length; si++) {
-      const slotLabel = def.slots[si];
+    // Role separator row
+    html += `<tr><td colspan="${fn_.days.length + 2}" style="background:var(--bg3);padding:3px 8px;font-size:10px;font-weight:700;color:${roleCol};letter-spacing:.5px;border:1px solid var(--bdr)">${role}s</td></tr>`;
+
+    for (const s of group) {
+      const totalHrs = calcHours(s.id, null);
+      const pct = s.fte > 0 ? Math.round(totalHrs / s.fte * 100) : 0;
+      const hrsCol = pct >= 100 ? 'var(--red)' : pct >= 85 ? 'var(--org)' : pct >= 50 ? 'var(--grn)' : 'var(--txt2)';
+
       html += `<tr>
-        <td class="col-shift">
-          <div class="shift-hdr" style="border-left:3px solid ${def.color}">
-            <div class="shift-name">${def.name}</div>
-            <div class="shift-time">${def.time}</div>
-            <div class="shift-slot">${slotLabel}</div>
-          </div>
-        </td>`;
+        <td style="position:sticky;left:0;z-index:2;background:var(--bg2);border:1px solid var(--bdr);padding:3px 8px;white-space:nowrap;min-width:130px">
+          <span style="color:${roleCol};font-weight:600">${s.name.split(',')[0] || s.name.split(' ').slice(-1)[0]}</span>
+        </td>
+        <td style="text-align:center;border:1px solid var(--bdr);padding:2px 3px;font-size:10px;color:${hrsCol};background:var(--bg2)">${totalHrs}h</td>`;
 
       for (const day of fn_.days) {
-        const applicable = isWkndShift ? day.isWeekend : !day.isWeekend;
-        const onLeaveAny = allStaff().some(s => isOnLeave(s.id, day.dayNum));
-        const todayCls = day.isToday ? ' today' : '';
-        const wkndCls = day.isWeekend ? ' weekend' : '';
+        const wknd = day.isWeekend;
+        const todayStyle = day.isToday ? 'border-left:2px solid var(--acc);border-right:2px solid var(--acc);' : '';
+        const wkndBg = wknd ? 'background:rgba(210,153,34,.05);' : '';
+        const leaveVal = state.leave[leaveKey(s.id, day.dayNum)] || '';
 
-        if (!applicable) {
-          html += `<td class="cell${wkndCls}${todayCls}" style="background:var(--bg);opacity:.3">—</td>`;
+        // Find what shift this person is on today
+        let cellContent = '';
+        let cellBg = '';
+
+        if (leaveVal === 'leave') {
+          cellContent = `<div style="color:var(--red);font-size:9px;font-weight:700">AL</div>`;
+          cellBg = 'background:rgba(248,81,73,.12);';
+        } else if (leaveVal === 'red') {
+          cellContent = `<div style="color:var(--org);font-size:9px;font-weight:700">RDO</div>`;
+          cellBg = 'background:rgba(210,153,34,.15);';
         } else {
-          const key = rKey(day.dayNum, shiftId, si);
-          const assigned = state.roster[key] || [];
-          html += `<td class="cell${wkndCls}${todayCls}" onclick="openCellModal('${day.dayNum}','${shiftId}','${si}')">`;
-          if (assigned.length === 0) {
-            html += `<div class="cell-empty">+</div>`;
-          } else {
-            html += `<div class="cell-staff">`;
-            for (const sid of assigned) {
-              const s = getStaff(sid);
-              if (s) {
-                html += `<span class="staff-tag ${staffColor(s.role)}" title="${s.name} (${s.role})" onclick="removeFromCell(event,'${day.dayNum}','${shiftId}','${si}','${sid}')">
-                  ${s.name.split(' ')[0]}<span style="opacity:.5;font-size:9px"> ✕</span>
-                </span>`;
+          // Find all shifts this person is assigned to today
+          const allShiftIds = [...WEEKDAY_SHIFTS, ...WEEKEND_SHIFTS];
+          const myShifts = [];
+          for (const shiftId of allShiftIds) {
+            const def = SHIFT_DEFS[shiftId];
+            for (let si = 0; si < def.slots.length; si++) {
+              const key = rKey(day.dayNum, shiftId, si);
+              if ((state.roster[key] || []).includes(s.id)) {
+                myShifts.push({ shiftId, si, def });
               }
             }
-            html += `</div>`;
           }
-          html += `</td>`;
-        }
+          if (myShifts.length > 0) {
+            const sh = myShifts[0];
+            cellBg = `background:${sh.def.color}22;`;
+            cellContent = myShifts.map(sh =>
+              `<div onclick="openCellModal('${day.dayNum}','${sh.shiftId}','${sh.si}')" style="cursor:pointer;color:${sh.def.color};font-weight:700;font-size:10px;line-height:1.3;white-space:nowrap">${sh.shiftId}</div>`
+            ).join('');
+          } else {
+            // Empty — click to assign
+            cellContent = `<div onclick="openDayStaffModal('${s.id}',${day.dayNum})" style="cursor:pointer;color:var(--txt3);font-size:9px;text-align:center;padding:2px">·</div>`;
+          }
+
+        html += `<td style="border:1px solid var(--bdr);padding:2px;${wkndBg}${cellBg}${todayStyle}min-width:38px;max-width:42px;text-align:center;vertical-align:middle">${cellContent}</td>`;
       }
       html += '</tr>';
     }
@@ -1029,236 +1070,39 @@ function renderRoster() {
 
   html += '</tbody></table></div>';
   document.getElementById('rosterGrid').innerHTML = html;
+
+  setTimeout(() => {
+    const today = document.querySelector('[data-today="true"]');
+    if (today) today.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
+  }, 100);
 }
 
-function removeFromCell(e, dayNum, shiftId, slotIdx, staffId) {
-  e.stopPropagation();
-  const key = rKey(dayNum, shiftId, slotIdx);
-  if (state.roster[key]) {
-    state.roster[key] = state.roster[key].filter(id => id !== staffId);
-    if (state.roster[key].length === 0) delete state.roster[key];
-  }
-  saveState();
-  renderRoster();
-  renderFTE();
-}
-
-// ═══════════════════════════════════════════════════════════
-// CELL MODAL
-// ═══════════════════════════════════════════════════════════
-let _cellContext = null;
-
-function openCellModal(dayNum, shiftId, slotIdx) {
-  _cellContext = { dayNum: parseInt(dayNum), shiftId, slotIdx: parseInt(slotIdx) };
+function openDayStaffModal(staffId, dayNum) {
   const fn_ = getFortnight(state.fortnight);
-  const day = fn_.days[parseInt(dayNum)];
-  const def = SHIFT_DEFS[shiftId];
-  const slotLabel = def.slots[parseInt(slotIdx)];
-  const key = rKey(dayNum, shiftId, slotIdx);
-  const current = state.roster[key] || [];
-
-  document.getElementById('cellModalTitle').textContent =
-    `${day.dayName} ${day.dateStr} — ${def.name} [${slotLabel}]`;
-
-  let body = `<div class="text-sm text-muted mb-1">${def.time} • ${def.label}</div>`;
-  body += `<div class="section-label">Select Staff</div><div class="staff-pick">`;
-
-  for (const s of allStaff()) {
-    const onLeave = isOnLeave(s.id, parseInt(dayNum));
-    const workingElsewhere = isWorkingDay(s.id, parseInt(dayNum)) && !current.includes(s.id);
-    const canDo = canFillSlot(s, shiftId, slotLabel);
-    const selected = current.includes(s.id);
-    let cls = `staff-pick-btn ${staffColor(s.role)}`;
-    if (selected) cls += ' selected';
-    if (onLeave || !canDo) cls += ' unavail';
-    const title = onLeave ? 'On Leave' : !canDo ? 'Not qualified' : workingElsewhere ? 'Working elsewhere today' : '';
-    body += `<button class="${cls}" title="${title}" onclick="toggleCellStaff('${s.id}')" ${onLeave||!canDo?'disabled':''}>
-      ${s.name.split(' ')[0]} <span style="font-size:9px;opacity:.6">${s.role}</span>
-    </button>`;
-  }
-  body += `</div>`;
-
-  // FN hours info
-  const fn = day.fn;
-  body += `<hr class="divider"><div class="section-label">Hours This FN</div>`;
-  const shown = allStaff().filter(s => canFillSlot(s, shiftId, slotLabel));
-  body += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-size:10px;color:var(--txt2)">`;
-  for (const s of shown.slice(0,12)) {
-    const h = calcHours(s.id, fn);
-    const t = getFteTarget(s, fn);
-    const pct = Math.round(h/t*100);
-    const col = pct >= 100 ? 'var(--red)' : pct >= 85 ? 'var(--org)' : 'var(--grn)';
-    body += `<div style="color:${col}">${s.name.split(' ')[0]}: ${h}/${t}h</div>`;
-  }
-  body += `</div>`;
-
-  document.getElementById('cellModalBody').innerHTML = body;
-  document.getElementById('cellModal').classList.add('show');
-}
-
-function toggleCellStaff(staffId) {
-  if (!_cellContext) return;
-  const { dayNum, shiftId, slotIdx } = _cellContext;
-  const key = rKey(dayNum, shiftId, slotIdx);
-  if (!state.roster[key]) state.roster[key] = [];
-  const idx = state.roster[key].indexOf(staffId);
-  if (idx >= 0) {
-    state.roster[key].splice(idx, 1);
-  } else {
-    state.roster[key].push(staffId);
-  }
-  saveState();
-  renderRoster();
-  renderFTE();
-  // Refresh modal
-  openCellModal(dayNum, shiftId, slotIdx);
-}
-
-// ═══════════════════════════════════════════════════════════
-// RENDER STAFF
-// ═══════════════════════════════════════════════════════════
-function renderStaff() {
-  let html = '';
-  for (const role of ['CN','RN','EN']) {
-    const group = state.staff.filter(s => s.role === role);
-    if (!group.length) continue;
-    html += `<div class="mb-2"><div class="section-label" style="color:var(--${staffColor(role)})">${role}s (${group.length})</div><div class="staff-grid">`;
-    for (const s of group) {
-      html += renderStaffCard(s);
-    }
-    html += '</div></div>';
-  }
-  document.getElementById('staffGrid').innerHTML = html;
-}
-
-function renderStaffCard(s) {
-  const role = s.role;
-  const isEN = role === 'EN';
-  const isCN = role === 'CN';
-  return `<div class="staff-card" id="sc-${s.id}">
-    <div class="staff-card-hdr">
-      <input class="staff-name-input" value="${s.name}" placeholder="Staff name..."
-        onchange="updateStaff('${s.id}','name',this.value)">
-      <span class="role-badge ${role}">${role}</span>
-      <button class="staff-del" onclick="deleteStaff('${s.id}')" title="Delete">×</button>
-    </div>
-    <div class="staff-fields">
-      <div class="field-group">
-        <label class="field-label">FTE Hrs (per FN × 2)</label>
-        <input class="field-input" type="number" min="8" max="76" step="0.5" value="${s.fte}"
-          onchange="updateStaff('${s.id}','fte',parseFloat(this.value))">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Role</label>
-        <select class="field-input" onchange="updateStaff('${s.id}','role',this.value)">
-          <option ${role==='CN'?'selected':''}>CN</option>
-          <option ${role==='RN'?'selected':''}>RN</option>
-          <option ${role==='EN'?'selected':''}>EN</option>
-        </select>
-      </div>
-    </div>
-    <div class="staff-flags">
-      ${!isEN ? `<label class="flag-cb"><input type="checkbox" ${s.tl?'checked':''} onchange="updateStaff('${s.id}','tl',this.checked)"> TL</label>` : ''}
-      ${!isEN ? `<label class="flag-cb"><input type="checkbox" ${s.shuttle?'checked':''} onchange="updateStaff('${s.id}','shuttle',this.checked)"> Shuttle RN</label>` : ''}
-      ${isEN ? `<label class="flag-cb"><input type="checkbox" ${s.enShuttle?'checked':''} onchange="updateStaff('${s.id}','enShuttle',this.checked)"> EN Shuttle</label>` : ''}
-      <label class="flag-cb"><input type="checkbox" ${s.flow?'checked':''} onchange="updateStaff('${s.id}','flow',this.checked)"> Flow</label>
-      ${isCN ? `<span class="tag" title="CNs cannot work weekday evenings">🚫 No EVE</span>` : ''}
-    </div>
-  </div>`;
-}
-
-function updateStaff(id, field, value) {
-  const s = state.staff.find(s => s.id === id);
+  const day = fn_.days[dayNum];
+  const s = getStaff(staffId);
   if (!s) return;
-  s[field] = value;
-  saveState();
-  if (field === 'role') renderStaff(); // Re-render to update flags
+  const applicableShifts = day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS;
+  const options = applicableShifts.map(shiftId => {
+    const def = SHIFT_DEFS[shiftId];
+    if (!canFillSlot(s, shiftId, def.slots[0])) return '';
+    return `<button class="btn btn-sm" style="border-left:3px solid ${def.color};margin:3px;width:100%;text-align:left"
+      onclick="assignShiftToStaff('${staffId}',${dayNum},'${shiftId}');closeModal('assignModal')">
+      <b>${shiftId}</b> <span style="color:var(--txt2);font-size:10px">${def.time}</span>
+    </button>`;
+  }).join('');
+  document.getElementById('assignModalTitle').textContent = `${s.name} — ${day.dayName} ${day.dateStr}`;
+  document.getElementById('assignModalBody').innerHTML = options || '<p style="color:var(--txt2);padding:8px">No eligible shifts</p>';
+  document.getElementById('assignModal').classList.add('show');
 }
 
-function addStaff(role) {
-  const id = 'staff_' + Date.now();
-  state.staff.push({ id, role, name:'', fte:38, tl:role!=='EN', shuttle:role!=='EN', flow:false, enShuttle:role==='EN' });
+function assignShiftToStaff(staffId, dayNum, shiftId) {
+  const key = rKey(dayNum, shiftId, 0);
+  if (!state.roster[key]) state.roster[key] = [];
+  if (!state.roster[key].includes(staffId)) state.roster[key].push(staffId);
   saveState();
-  renderStaff();
-}
-
-function deleteStaff(id) {
-  if (!confirm('Delete this staff member?')) return;
-  state.staff = state.staff.filter(s => s.id !== id);
-  // Remove from roster
-  for (const key in state.roster) {
-    state.roster[key] = state.roster[key].filter(sid => sid !== id);
-    if (state.roster[key].length === 0) delete state.roster[key];
-  }
-  saveState();
-  renderStaff();
   renderRoster();
-}
-
-// ═══════════════════════════════════════════════════════════
-// RENDER LEAVE
-// ═══════════════════════════════════════════════════════════
-function renderLeave() {
-  const fn_ = getFortnight(state.fortnight);
-  
-  // Build header row with day labels
-  let html = `<div style="overflow-x:auto">
-  <table style="border-collapse:collapse;width:100%;font-size:12px">
-  <thead>
-    <tr>
-      <th style="text-align:left;padding:6px 10px;background:var(--bg3);border:1px solid var(--bdr);min-width:140px;position:sticky;left:0;z-index:2">Staff</th>`;
-  
-  for (const day of fn_.days) {
-    const wknd = day.isWeekend ? 'color:var(--org)' : '';
-    const todayStyle = day.isToday ? 'background:rgba(88,166,255,.1);' : '';
-    html += `<th style="text-align:center;padding:4px 2px;background:var(--bg3);border:1px solid var(--bdr);min-width:44px;${wknd}${todayStyle}">
-      <div style="font-weight:700">${day.dayName}</div>
-      <div style="font-size:10px;opacity:.7">${day.dateStr}</div>
-    </th>`;
-  }
-  html += `</tr></thead><tbody>`;
-
-  for (const s of allStaff()) {
-    const roleCol = s.role === 'CN' ? 'var(--cn)' : s.role === 'RN' ? 'var(--rn)' : 'var(--en)';
-    html += `<tr>
-      <td style="padding:5px 10px;border:1px solid var(--bdr);background:var(--bg2);position:sticky;left:0;z-index:1;white-space:nowrap">
-        <span style="color:${roleCol};font-weight:600;font-size:11px">${s.role}</span>
-        <span style="margin-left:5px">${s.name}</span>
-      </td>`;
-    
-    for (const day of fn_.days) {
-      const key = leaveKey(s.id, day.dayNum);
-      const val = state.leave[key] || '';
-      const todayStyle = day.isToday ? 'background:rgba(88,166,255,.06);' : '';
-      
-      let cellContent = '';
-      let cellStyle = `padding:2px;border:1px solid var(--bdr);text-align:center;cursor:pointer;${todayStyle}`;
-      
-      if (val === 'leave') {
-        cellStyle += 'background:rgba(248,81,73,.15);';
-        cellContent = `<span style="color:var(--red);font-size:10px;font-weight:700">AL</span>`;
-      } else if (val === 'red') {
-        cellStyle += 'background:rgba(210,153,34,.2);';
-        cellContent = `<span style="color:var(--org);font-size:10px;font-weight:700">RD</span>`;
-      } else {
-        cellContent = `<span style="color:var(--txt3);font-size:10px">·</span>`;
-      }
-      
-      html += `<td style="${cellStyle}" onclick="toggleLeave('${s.id}',${day.dayNum})" title="Click to toggle: Available → Annual Leave → RDO → Available">${cellContent}</td>`;
-    }
-    html += `</tr>`;
-  }
-
-  html += `</tbody></table></div>
-  <div style="margin-top:10px;font-size:11px;color:var(--txt2);display:flex;gap:16px;align-items:center">
-    <span>Click any cell to toggle:</span>
-    <span style="background:rgba(248,81,73,.15);color:var(--red);padding:2px 8px;border-radius:4px;font-weight:700">AL = Annual Leave</span>
-    <span style="background:rgba(210,153,34,.2);color:var(--org);padding:2px 8px;border-radius:4px;font-weight:700">RD = RDO / RED Day</span>
-    <span style="color:var(--txt3)">· = Available</span>
-    <span style="color:var(--txt2)">(Max 3 RDOs per week)</span>
-  </div>`;
-
-  document.getElementById('leaveGrid').innerHTML = html;
+  renderFTE();
 }
 
 function toggleLeave(staffId, dayNum) {
@@ -1267,10 +1111,10 @@ function toggleLeave(staffId, dayNum) {
   if (!cur) {
     state.leave[key] = 'leave';
   } else if (cur === 'leave') {
-    // Check RDO limit — max 3 per week
+    // Check RDO limit — max 3 per week (week = 7 day block)
     const fn_ = getFortnight(state.fortnight);
     const day = fn_.days[dayNum];
-    const weekStart = day.fn === 1 ? 0 : 7;
+    const weekStart = day.week === 1 ? 0 : day.week === 2 ? 7 : day.week === 3 ? 14 : 21;
     const weekEnd = weekStart + 6;
     const rdoCount = fn_.days.filter(d => d.dayNum >= weekStart && d.dayNum <= weekEnd).filter(d => state.leave[leaveKey(staffId, d.dayNum)] === 'red').length;
     if (rdoCount >= 3) { alert('Max 3 RDO days per week'); return; }
@@ -1550,7 +1394,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Buttons
-  document.getElementById('btnLoadOTS').addEventListener('click', loadPreloadedRoster);
   document.getElementById('btnAIFill').addEventListener('click', aiAutofill);
   document.getElementById('btnFillLegacy').addEventListener('click', () => { if(confirm('Quick Fill will overwrite the current roster. Continue?')) quickFill(); });
   document.getElementById('btnClear').addEventListener('click', () => { if(confirm('Clear all roster assignments?')) { state.roster={}; saveState(); renderRoster(); renderFTE(); } });
