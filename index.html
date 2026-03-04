@@ -208,52 +208,10 @@ hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
   body { background:#fff; color:#000; }
 }
 
-/* PIN LOCK */
-.pin-overlay { position:fixed; inset:0; background:var(--bg); z-index:9999; display:flex; align-items:center; justify-content:center; }
-.pin-box { background:var(--bg2); border:1px solid var(--bdr2); border-radius:var(--r2); padding:32px; width:320px; text-align:center; }
-.pin-title { font-size:18px; font-weight:700; color:var(--acc); margin-bottom:6px; }
-.pin-sub { font-size:12px; color:var(--txt2); margin-bottom:24px; }
-.pin-dots { display:flex; justify-content:center; gap:12px; margin-bottom:24px; }
-.pin-dot { width:14px; height:14px; border-radius:50%; border:2px solid var(--bdr2); background:transparent; transition:.15s; }
-.pin-dot.filled { background:var(--acc); border-color:var(--acc); }
-.pin-pad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
-.pin-btn { padding:14px; border:1px solid var(--bdr); background:var(--bg3); color:var(--txt); border-radius:var(--r); cursor:pointer; font-size:16px; font-weight:600; transition:.15s; }
-.pin-btn:hover { background:var(--bg4); border-color:var(--bdr2); }
-.pin-btn:active { transform:scale(.95); }
-.pin-clear { grid-column:1; font-size:12px; color:var(--txt2); }
-.pin-zero { grid-column:2; }
-.pin-error { font-size:11px; color:var(--red); height:16px; margin-top:4px; }
 </style>
 </head>
 <body>
 
-<!-- PIN LOCK OVERLAY -->
-<div class="pin-overlay" id="pinOverlay">
-  <div class="pin-box">
-    <div class="pin-title">🏥 Ward Roster</div>
-    <div class="pin-sub">Robina Transfer Unit — Enter PIN to access</div>
-    <div class="pin-dots" id="pinDots">
-      <div class="pin-dot" id="dot0"></div>
-      <div class="pin-dot" id="dot1"></div>
-      <div class="pin-dot" id="dot2"></div>
-      <div class="pin-dot" id="dot3"></div>
-    </div>
-    <div class="pin-pad">
-      <button class="pin-btn" onclick="pinPress('1')">1</button>
-      <button class="pin-btn" onclick="pinPress('2')">2</button>
-      <button class="pin-btn" onclick="pinPress('3')">3</button>
-      <button class="pin-btn" onclick="pinPress('4')">4</button>
-      <button class="pin-btn" onclick="pinPress('5')">5</button>
-      <button class="pin-btn" onclick="pinPress('6')">6</button>
-      <button class="pin-btn" onclick="pinPress('7')">7</button>
-      <button class="pin-btn" onclick="pinPress('8')">8</button>
-      <button class="pin-btn" onclick="pinPress('9')">9</button>
-      <button class="pin-btn pin-clear" onclick="pinClear()">⌫</button>
-      <button class="pin-btn pin-zero" onclick="pinPress('0')">0</button>
-      <div></div>
-    </div>
-    <div class="pin-error" id="pinError"></div>
-  </div>
 </div>
 
 <!-- ASSIGN SHIFT MODAL -->
@@ -542,14 +500,13 @@ function calcHours(staffId, fn=null) {
   let total = 0;
   const days = fn ? fn_.days.filter(d => d.fn === fn) : fn_.days;
   for (const day of days) {
-    const shifts = day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS;
+    const shifts = [...(day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS), 'MGT'];
     for (const shiftId of shifts) {
       const def = SHIFT_DEFS[shiftId];
-      for (let si = 0; si < def.slots.length; si++) {
-        const key = rKey(day.dayNum, shiftId, si);
-        const assigned = state.roster[key] || [];
-        if (assigned.includes(staffId)) total += def.hours;
-      }
+      if (!def) continue;
+      const key = rKey(day.dayNum, shiftId, 0);
+      const assigned = state.roster[key] || [];
+      if (assigned.includes(staffId)) total += def.hours;
     }
   }
   return total;
@@ -576,10 +533,8 @@ function isWorkingDay(staffId, dayNum) {
   const shifts = day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS;
   for (const shiftId of shifts) {
     const def = SHIFT_DEFS[shiftId];
-    for (let si = 0; si < def.slots.length; si++) {
-      const key = rKey(dayNum, shiftId, si);
-      if ((state.roster[key]||[]).includes(staffId)) return true;
-    }
+    const key = rKey(dayNum, shiftId, 0);
+    if ((state.roster[key]||[]).includes(staffId)) return true;
   }
   return false;
 }
@@ -664,7 +619,7 @@ function quickFill() {
     const shifts = day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS;
     for (const sh of shifts) {
       const def = SHIFT_DEFS[sh];
-      for (let si = 0; si < def.slots.length; si++) {
+      for (let si = 0; si < 1; si++) {
         if ((newRoster[rKey(dayNum, sh, si)]||[]).includes(staffId)) return true;
       }
     }
@@ -705,9 +660,9 @@ function quickFill() {
     for (const shiftId of WEEKDAY_SHIFTS) {
       const def = SHIFT_DEFS[shiftId];
       // Skip EVE for CNs — handled via canFillSlot
-      for (let si = 0; si < def.slots.length; si++) {
-        const slotLabel = def.slots[si];
-        const key = rKey(day.dayNum, shiftId, si);
+      for (let si = 0; si < 1; si++) {
+        const slotLabel = shiftId;
+        const key = rKey(day.dayNum, shiftId, 0);
 
         // One CN morning rule: EC TL and E TL share the same CN
         if ((shiftId === 'EC' || shiftId === 'E') && slotLabel.toLowerCase().includes('team leader')) {
@@ -744,8 +699,8 @@ function quickFill() {
   for (const day of fn_.days.filter(d => d.isWeekend)) {
     for (const shiftId of WEEKEND_SHIFTS) {
       const def = SHIFT_DEFS[shiftId];
-      for (let si = 0; si < def.slots.length; si++) {
-        const slotLabel = def.slots[si];
+      for (let si = 0; si < 1; si++) {
+        const slotLabel = shiftId;
         const candidates = getBestCandidates(day.dayNum, shiftId, slotLabel);
         if (candidates.length > 0) {
           assignStaff(candidates[0].id, day.dayNum, shiftId, si, def.hours);
@@ -1068,10 +1023,9 @@ function renderRoster() {
           const myShifts=[];
           for (const shiftId of allShiftIds) {
             const def=SHIFT_DEFS[shiftId];
-            for (let si=0;si<def.slots.length;si++) {
-              if ((state.roster[rKey(day.dayNum,shiftId,si)]||[]).includes(s.id))
-                myShifts.push({shiftId,si,def});
-            }
+            const key0=rKey(day.dayNum,shiftId,0);
+            if ((state.roster[key0]||[]).includes(s.id))
+              myShifts.push({shiftId,si:0,def});
           }
           if (myShifts.length>0) {
             cellBg=`background:${myShifts[0].def.color}18;`;
@@ -1156,7 +1110,7 @@ function openCellModal(dayNum, shiftId, slotIdx) {
   const fn_ = getFortnight(state.fortnight);
   const day = fn_.days[parseInt(dayNum)];
   const def = SHIFT_DEFS[shiftId];
-  const slotLabel = def.slots[parseInt(slotIdx)];
+  const slotLabel = shiftId; // slot label = shift name in new structure
   const key = rKey(dayNum, shiftId, slotIdx);
   const current = state.roster[key] || [];
 
@@ -1433,7 +1387,7 @@ function renderReport() {
     const shifts = { EC:0, E:0, L:0, AM:0, LD:0, EVE:0 };
     for (const sh of WEEKDAY_SHIFTS) {
       const def = SHIFT_DEFS[sh];
-      for (let si = 0; si < def.slots.length; si++) {
+      for (let si = 0; si < 1; si++) {
         shifts[sh] += (state.roster[rKey(day.dayNum, sh, si)]||[]).length;
       }
     }
@@ -1476,20 +1430,19 @@ function renderReport() {
       <thead><tr><th>Day</th><th>EVE Assigned</th><th>CN in EVE?</th><th>Rule OK</th></tr></thead><tbody>`;
 
   for (const day of fn_.days.filter(d => !d.isWeekend)) {
-    const eveDef = SHIFT_DEFS['EVE'];
-    const eveStaff = [];
-    for (let si = 0; si < eveDef.slots.length; si++) {
-      (state.roster[rKey(day.dayNum,'EVE',si)]||[]).forEach(id => {
-        const s = getStaff(id); if (s) eveStaff.push(s);
+    const leStaff = [];
+    for (const lateId of ['LE-TL','LE','LA']) {
+      (state.roster[rKey(day.dayNum,lateId,0)]||[]).forEach(id => {
+        const s = getStaff(id); if (s) leStaff.push(s);
       });
     }
-    const cnInEve = eveStaff.filter(s => s.role === 'CN');
-    const ok = cnInEve.length === 0;
-    if (!ok || eveStaff.length > 0) {
+    const cnInLate = leStaff.filter(s => s.role === 'CN');
+    const ok = cnInLate.length === 0;
+    if (!ok || leStaff.length > 0) {
       html += `<tr>
         <td>${day.dayName} ${day.dateStr}</td>
-        <td>${eveStaff.map(s=>s.name).join(', ')||'—'}</td>
-        <td>${cnInEve.map(s=>s.name).join(', ')||'None'}</td>
+        <td>${leStaff.map(s=>s.name).join(', ')||'—'}</td>
+        <td>${cnInLate.map(s=>s.name).join(', ')||'None'}</td>
         <td><span class="badge ${ok?'badge-ok':'badge-err'}">${ok?'OK':'VIOLATION'}</span></td>
       </tr>`;
     }
@@ -1570,71 +1523,7 @@ function renderAll() {
 // ═══════════════════════════════════════════════════════════
 // INIT & EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════
-// PIN LOCK
-// ═══════════════════════════════════════════════════════════
-// PIN is stored as a SHA-256 hash. Default PIN: 1234
-// To change: run btoa(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('yourpin')))
-// then replace PIN_HASH below with the new value.
-const PIN_HASH = '295c4d1595596d3980b290fe876449463b8b87397cd13414fd6209a7ffe26eea'; // PIN: 3745
-
-let pinEntry = '';
-
-function pinPress(digit) {
-  if (pinEntry.length >= 4) return;
-  pinEntry += digit;
-  updatePinDots();
-  if (pinEntry.length === 4) setTimeout(checkPin, 150);
-}
-
-function pinClear() {
-  pinEntry = pinEntry.slice(0, -1);
-  updatePinDots();
-  document.getElementById('pinError').textContent = '';
-}
-
-function updatePinDots() {
-  for (let i = 0; i < 4; i++) {
-    document.getElementById('dot' + i).classList.toggle('filled', i < pinEntry.length);
-  }
-}
-
-async function checkPin() {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pinEntry);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-  if (hashHex === PIN_HASH) {
-    document.getElementById('pinOverlay').style.display = 'none';
-    sessionStorage.setItem('rosterAuth', '1');
-  } else {
-    document.getElementById('pinError').textContent = 'Incorrect PIN — try again';
-    pinEntry = '';
-    updatePinDots();
-    // Shake animation
-    const box = document.querySelector('.pin-box');
-    box.style.animation = 'none';
-    box.offsetHeight;
-    box.style.animation = 'shake .3s ease';
-  }
-}
-
-// Allow keyboard input on PIN screen
-document.addEventListener('keydown', e => {
-  if (document.getElementById('pinOverlay').style.display === 'none') return;
-  if (e.key >= '0' && e.key <= '9') pinPress(e.key);
-  if (e.key === 'Backspace') pinClear();
-});
-
-
-// ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  // Check session auth
-  if (sessionStorage.getItem('rosterAuth') === '1') {
-    document.getElementById('pinOverlay').style.display = 'none';
-  }
-
   try {
     loadState();
     renderAll();
