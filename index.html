@@ -871,40 +871,35 @@ Fill every possible shift slot. Be thorough. Prioritise FTE compliance above all
   addLog('=== AI AUTOFILL START ===', 'ai');
   addLog(`Period: ${periodStart} (28 days)`, 'ai');
 
-  try {
-    setAIStatus('AI is scheduling the full period...');
+  async function callWorker(promptText, label) {
+    setAIStatus(label);
     const response = await fetch('https://wispy-sun-c99e.aaadxk.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 8000,
-        messages: [{ role: 'user', content: prompt }]
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: promptText }]
       })
     });
-
     if (!response.ok) {
       let errMsg = `HTTP ${response.status}`;
       try { const err = await response.json(); errMsg = err.error?.message || errMsg; } catch(e) {}
       throw new Error(errMsg);
     }
-
     const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const text = data.content.map(x => x.text||'').join('');
+    const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    try { return JSON.parse(jsonMatch ? jsonMatch[0] : clean); }
+    catch(e) { throw new Error('Could not parse AI response: ' + text.slice(0,300)); }
+  }
 
-    setAIStatus('Parsing AI response...');
-    let parsed;
-    try {
-      const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-      const jsonMatch = clean.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
-    } catch(e) {
-      throw new Error('Could not parse AI response: ' + text.slice(0,300));
-    }
+  let applied = 0, skipped = 0;
+  const assignedToday = {};
 
-    // Apply assignments with full validation
-    let applied = 0, skipped = 0;
-    const assignedToday = {}; // track per-day per-staff
+  function applyParsed(parsed) {
     for (const a of (parsed.assignments||[])) {
       const key = rKey(a.dayNum, a.shiftId, a.slotIdx);
       if (state.roster[key] && state.roster[key].length > 0) { skipped++; continue; }
@@ -912,12 +907,9 @@ Fill every possible shift slot. Be thorough. Prioritise FTE compliance above all
       if (!s) { addLog(`  Skip: staffId ${a.staffId} not found`, 'warn'); skipped++; continue; }
       const def = SHIFT_DEFS[a.shiftId];
       if (!def) { addLog(`  Skip: shiftId ${a.shiftId} unknown`, 'warn'); skipped++; continue; }
-      // One shift per day
       const todayKey = `${a.staffId}|${a.dayNum}`;
-      if (assignedToday[todayKey]) { addLog(`  Skip: ${s.name} already assigned day ${a.dayNum}`, 'warn'); skipped++; continue; }
-      // Eligibility
+      if (assignedToday[todayKey]) { skipped++; continue; }
       if (!canWorkShift(s, a.shiftId)) { addLog(`  Skip: ${s.name} cannot work ${a.shiftId}`, 'warn'); skipped++; continue; }
-      // Leave check
       const leaveVal = state.leave[leaveKey(s.id, a.dayNum)];
       if (leaveVal) { addLog(`  Skip: ${s.name} on ${leaveVal} day ${a.dayNum}`, 'warn'); skipped++; continue; }
       if (!state.roster[key]) state.roster[key] = [];
@@ -925,17 +917,35 @@ Fill every possible shift slot. Be thorough. Prioritise FTE compliance above all
       assignedToday[todayKey] = true;
       applied++;
     }
-
     if (parsed.notes) addLog(`AI notes: ${parsed.notes}`, 'ai');
-    addLog(`Applied ${applied}, skipped ${skipped}`, 'ok');
+  }
+
+  try {
+    const fn1Days = fn_.days.filter(d=>d.fn===1).map(d=>d.dayNum);
+    const fn2Days = fn_.days.filter(d=>d.fn===2).map(d=>d.dayNum);
+
+    const makeFnPrompt = (fnNum, days) =>
+      prompt.replace(
+        `Schedule the ${periodStart} 28-day pay period (days 0–27).`,
+        `Schedule FORTNIGHT ${fnNum} ONLY (days ${days[0]}–${days[days.length-1]}) of the ${periodStart} pay period. Only output assignments for days ${days[0]}–${days[days.length-1]}.`
+      );
+
+    addLog('Calling AI for FN1 (days 0–13)...', 'ai');
+    const parsed1 = await callWorker(makeFnPrompt(1, fn1Days), 'Scheduling FN1 (days 0–13)...');
+    applyParsed(parsed1);
+    addLog(`FN1 done — ${applied} applied so far`, 'ok');
+    saveState(); renderRoster(); renderFTE();
+
+    addLog('Calling AI for FN2 (days 14–27)...', 'ai');
+    const parsed2 = await callWorker(makeFnPrompt(2, fn2Days), 'Scheduling FN2 (days 14–27)...');
+    applyParsed(parsed2);
+
+    addLog(`Applied ${applied} total, skipped ${skipped}`, 'ok');
     addLog('=== AI AUTOFILL COMPLETE ===', 'ai');
     setAIStatus(`✅ Done — ${applied} assignments applied`);
     setTimeout(() => { document.getElementById('aiPanel').style.display = 'none'; }, 4000);
 
-    saveState();
-    renderRoster();
-    renderFTE();
-    renderReport();
+    saveState(); renderRoster(); renderFTE(); renderReport();
 
   } catch(err) {
     addLog(`AI Error: ${err.message}`, 'err');
