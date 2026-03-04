@@ -395,45 +395,76 @@ hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
 // CONSTANTS & CONFIG
 // ═══════════════════════════════════════════════════════════
 
+/* SHIFT DEFINITIONS
+   Weekday (Mon–Fri):
+     EC-TL  06:00–14:30  CN/RN Team Leader (AM TL — CN priority)
+     EC     06:00–14:30  RN/EN floor
+     EC-ESC 06:00–14:30  EN Shuttle + floor
+     E-TL   07:00–15:30  CN/RN Team Leader (AM TL — CN priority)
+     E      07:00–15:30  RN/EN floor
+     EG-PTS 08:30–17:00  Shuttle RN
+     EJ     09:30–18:00  Flow Nurse
+     LA     12:00–20:30  RN/EN (preferred over EM-ESC)
+     EM-ESC 11:00–19:30  EN Shuttle + floor
+     LE-TL  13:00–21:30  RN TL only (CNs excluded)
+     LE     13:00–21:30  RN/EN
+   Weekend (Sat–Sun):
+     EE-TL  07:30–16:00  CN/RN Team Leader
+     EE     07:30–16:00  RN/EN
+   Special:
+     MGT    —            CN Management day (1/month, not counted as floor)
+*/
+
 const SHIFT_DEFS = {
-  EC: { name:'EC', label:'Early (6am)', time:'0600-1430', color:'#f0883e', hours:8, slots:['Team Leader','RN/EN'] },
-  E:  { name:'E',  label:'Early (7am)', time:'0700-1530', color:'#d29922', hours:8, slots:['Team Leader','RN/EN','Shuttle/Flow'] },
-  L:  { name:'L',  label:'Late',        time:'1100-1930', color:'#58a6ff', hours:8, slots:['RN/EN'] },
-  AM: { name:'AM', label:'AM',          time:'0700-1330', color:'#39d353', hours:6, slots:['EN Shuttle'] },
-  LD: { name:'LD', label:'Late Day',    time:'0830-1700', color:'#bc8cff', hours:8, slots:['RN/EN'] },
-  // Evening - CNs cannot do this
-  EVE:{ name:'EVE',label:'Evening',     time:'1400-2200', color:'#79c0ff', hours:8, slots:['RN/EN'] },
-  // Weekend
-  WD: { name:'WD', label:'Day (Wknd)',  time:'0700-1530', color:'#f0883e', hours:8, slots:['Team Leader','RN/EN','RN/EN'] },
-  WA: { name:'WA', label:'Aft (Wknd)', time:'1130-1930', color:'#58a6ff', hours:8, slots:['RN/EN'] },
-  WN: { name:'WN', label:'Eve (Wknd)', time:'1400-2200', color:'#79c0ff', hours:8, slots:['RN/EN'] },
+  // ── Weekday AM ────────────────────────────────────────────
+  'EC-TL': { name:'EC-TL', label:'Early 6am TL',   time:'0600–1430', color:'#f0883e', hours:8, isTL:true,  isAM:true,  isLate:false, isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:true },
+  'EC':    { name:'EC',    label:'Early 6am',       time:'0600–1430', color:'#d97c2a', hours:8, isTL:false, isAM:true,  isLate:false, isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:true },
+  'EC-ESC':{ name:'EC-ESC',label:'Early 6am ESC',   time:'0600–1430', color:'#c8923a', hours:8, isTL:false, isAM:true,  isLate:false, isShutle:false, isFlow:false, isEnShuttle:true,  cnAllowed:false },
+  'E-TL':  { name:'E-TL',  label:'Early 7am TL',   time:'0700–1530', color:'#d29922', hours:8, isTL:true,  isAM:true,  isLate:false, isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:true },
+  'E':     { name:'E',     label:'Early 7am',       time:'0700–1530', color:'#b8890f', hours:8, isTL:false, isAM:true,  isLate:false, isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:true },
+  'EG-PTS':{ name:'EG-PTS',label:'Shuttle RN',      time:'0830–1700', color:'#bc8cff', hours:8, isTL:false, isAM:true,  isLate:false, isShutle:true,  isFlow:false, isEnShuttle:false, cnAllowed:true },
+  'EJ':    { name:'EJ',    label:'Flow Nurse',      time:'0930–1800', color:'#39d353', hours:8, isTL:false, isAM:true,  isLate:false, isShutle:false, isFlow:true,  isEnShuttle:false, cnAllowed:true },
+  // ── Weekday Late ─────────────────────────────────────────
+  'LA':    { name:'LA',    label:'Late Afternoon',  time:'1200–2030', color:'#58a6ff', hours:8, isTL:false, isAM:false, isLate:true,  isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:false },
+  'EM-ESC':{ name:'EM-ESC',label:'Mid ESC',         time:'1100–1930', color:'#4a90d9', hours:8, isTL:false, isAM:false, isLate:true,  isShutle:false, isFlow:false, isEnShuttle:true,  cnAllowed:false },
+  'LE-TL': { name:'LE-TL', label:'Late TL',         time:'1300–2130', color:'#79c0ff', hours:8, isTL:true,  isAM:false, isLate:true,  isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:false },
+  'LE':    { name:'LE',    label:'Late',             time:'1300–2130', color:'#5a9fd4', hours:8, isTL:false, isAM:false, isLate:true,  isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:false },
+  // ── Weekend ──────────────────────────────────────────────
+  'EE-TL': { name:'EE-TL', label:'Weekend TL',      time:'0730–1600', color:'#f0883e', hours:8, isTL:true,  isAM:true,  isLate:false, isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:true },
+  'EE':    { name:'EE',    label:'Weekend',          time:'0730–1600', color:'#c8a84b', hours:8, isTL:false, isAM:true,  isLate:false, isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:true },
+  // ── Special ──────────────────────────────────────────────
+  'MGT':   { name:'MGT',   label:'Management Day',  time:'0700–1530', color:'#6e7681', hours:8, isTL:false, isAM:false, isLate:false, isShutle:false, isFlow:false, isEnShuttle:false, cnAllowed:true, isMgt:true },
 };
 
-// Weekday = Mon–Fri shifts, Weekend = Sat/Sun shifts
-const WEEKDAY_SHIFTS = ['EC','E','L','AM','LD','EVE'];
-const WEEKEND_SHIFTS = ['WD','WA','WN'];
+// Weekday = Mon–Fri, Weekend = Sat–Sun
+const WEEKDAY_SHIFTS = ['EC-TL','EC','EC-ESC','E-TL','E','EG-PTS','EJ','LA','EM-ESC','LE-TL','LE'];
+const WEEKEND_SHIFTS = ['EE-TL','EE'];
+const ALL_SHIFTS = [...WEEKDAY_SHIFTS, ...WEEKEND_SHIFTS, 'MGT'];
 
-// CNs CANNOT work EVE (evening shift weekdays) - but CAN do weekend
-const CN_FORBIDDEN_SHIFTS = ['EVE'];
+// CNs cannot do late shifts on weekdays (LA, EM-ESC, LE-TL, LE)
+const CN_FORBIDDEN_WEEKDAY = ['LA','EM-ESC','LE-TL','LE'];
 
+// ── Staff defaults ────────────────────────────────────────
+// ENs: flow=true, enShuttle=true by default
+// RNs/CNs: shuttle=true, flow=true (all except EN Shuttle)
 const DEFAULT_STAFF = [
-  // CNs — all TL capable, shuttle capable
-  { id:'cn1', role:'CN', name:'Denise Endres',           fte:48, tl:true, shuttle:true, flow:false, enShuttle:false },
-  { id:'cn2', role:'CN', name:'Stephanie Field',         fte:64, tl:true, shuttle:true, flow:false, enShuttle:false },
-  { id:'cn3', role:'CN', name:'Adam Krenske',            fte:60, tl:true, shuttle:true, flow:true,  enShuttle:false },
+  // CNs
+  { id:'cn1', role:'CN', name:'Denise Endres',            fte:48, tl:true, shuttle:true, flow:true, enShuttle:false },
+  { id:'cn2', role:'CN', name:'Stephanie Field',          fte:64, tl:true, shuttle:true, flow:true, enShuttle:false },
+  { id:'cn3', role:'CN', name:'Adam Krenske',             fte:60, tl:true, shuttle:true, flow:true, enShuttle:false },
+  { id:'rn4', role:'CN', name:'Natasha Roberts',          fte:64, tl:true, shuttle:true, flow:true, enShuttle:false },
   // RNs
-  { id:'rn1', role:'RN', name:'Alison McCarthy',         fte:64, tl:true,  shuttle:false,flow:false, enShuttle:false },
-  { id:'rn2', role:'RN', name:'Arathi Nedunilath Xavier',fte:48, tl:true,  shuttle:false,flow:true,  enShuttle:false },
-  { id:'rn3', role:'RN', name:'Lani Hogan',              fte:56, tl:false, shuttle:false,flow:false, enShuttle:false },
-  { id:'rn4', role:'CN', name:'Natasha Roberts',         fte:64, tl:true,  shuttle:true, flow:true,  enShuttle:false },
-  { id:'rn5', role:'RN', name:'Katrina Contacos',        fte:64, tl:true,  shuttle:true, flow:true,  enShuttle:false },
-  { id:'rn6', role:'RN', name:'Chloe Watson',            fte:32, tl:false, shuttle:false,flow:false, enShuttle:false },
-  // ENs
-  { id:'en1', role:'EN', name:'Kristi Brayshaw',         fte:40, tl:false, shuttle:false,flow:false, enShuttle:true },
-  { id:'en2', role:'EN', name:'Sharon Hosking',          fte:76, tl:false, shuttle:false,flow:false, enShuttle:true },
-  { id:'en3', role:'EN', name:'Stephen James',           fte:48, tl:false, shuttle:false,flow:false, enShuttle:true },
-  { id:'en4', role:'EN', name:'Laura Sampson',           fte:64, tl:false, shuttle:false,flow:false, enShuttle:true },
-  { id:'en5', role:'EN', name:'Jessica Wilson',          fte:64, tl:false, shuttle:false,flow:false, enShuttle:true },
+  { id:'rn1', role:'RN', name:'Alison McCarthy',          fte:64, tl:true,  shuttle:true, flow:true, enShuttle:false },
+  { id:'rn2', role:'RN', name:'Arathi Nedunilath Xavier', fte:48, tl:true,  shuttle:true, flow:true, enShuttle:false },
+  { id:'rn3', role:'RN', name:'Lani Hogan',               fte:56, tl:false, shuttle:true, flow:true, enShuttle:false },
+  { id:'rn5', role:'RN', name:'Katrina Contacos',         fte:64, tl:true,  shuttle:true, flow:true, enShuttle:false },
+  { id:'rn6', role:'RN', name:'Chloe Watson',             fte:32, tl:false, shuttle:true, flow:true, enShuttle:false },
+  // ENs — all can do floor + EN Shuttle + flow
+  { id:'en1', role:'EN', name:'Kristi Brayshaw',          fte:40, tl:false, shuttle:false, flow:true, enShuttle:true },
+  { id:'en2', role:'EN', name:'Sharon Hosking',           fte:76, tl:false, shuttle:false, flow:true, enShuttle:true },
+  { id:'en3', role:'EN', name:'Stephen James',            fte:48, tl:false, shuttle:false, flow:true, enShuttle:true },
+  { id:'en4', role:'EN', name:'Laura Sampson',            fte:64, tl:false, shuttle:false, flow:true, enShuttle:true },
+  { id:'en5', role:'EN', name:'Jessica Wilson',           fte:64, tl:false, shuttle:false, flow:true, enShuttle:true },
 ];
 
 // ═══════════════════════════════════════════════════════════
@@ -553,48 +584,60 @@ function isWorkingDay(staffId, dayNum) {
   return false;
 }
 
+function isAssignedAnyShiftToday(staffId, dayNum) {
+  // Returns true if staff already has any shift on this day
+  const day = getFortnight(state.fortnight).days[dayNum];
+  if (!day) return false;
+  const shifts = day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS;
+  for (const shiftId of [...shifts, 'MGT']) {
+    const def = SHIFT_DEFS[shiftId];
+    if (!def) continue;
+    const key = rKey(dayNum, shiftId, 0);
+    if ((state.roster[key]||[]).includes(staffId)) return true;
+  }
+  return false;
+}
+
 function canWorkShift(staff, shiftId) {
-  // CNs cannot do evening (weekday EVE)
-  if (staff.role === 'CN' && CN_FORBIDDEN_SHIFTS.includes(shiftId)) return false;
-  // Slot-specific qualification checks done separately
+  const def = SHIFT_DEFS[shiftId];
+  if (!def) return false;
+  // MGT = CNs only
+  if (def.isMgt) return staff.role === 'CN';
+  // CNs cannot do late shifts on weekdays
+  if (staff.role === 'CN' && CN_FORBIDDEN_WEEKDAY.includes(shiftId)) return false;
+  // EN Shuttle shifts: ENs only
+  if (def.isEnShuttle && staff.role !== 'EN') return false;
+  // Non-EN cannot do EN Shuttle
+  if (shiftId === 'EC-ESC' || shiftId === 'EM-ESC') return staff.role === 'EN';
+  // TL shifts: must have tl flag
+  if (def.isTL) return staff.tl === true;
+  // EG-PTS (Shuttle RN): RN/CN with shuttle flag
+  if (shiftId === 'EG-PTS') return (staff.role === 'RN' || staff.role === 'CN') && staff.shuttle === true;
+  // EJ (Flow): anyone with flow flag
+  if (shiftId === 'EJ') return staff.flow === true;
+  // Late shifts: no CNs
+  if (def.isLate) return staff.role !== 'CN';
   return true;
 }
 
 function canFillSlot(staff, shiftId, slotLabel) {
-  if (!canWorkShift(staff, shiftId)) return false;
-  const sl = slotLabel.toLowerCase();
-  if (sl.includes('team leader') || sl.includes('tl')) {
-    return staff.tl === true;
-  }
-  if (sl.includes('en shuttle')) {
-    return staff.enShuttle === true;
-  }
-  if (sl.includes('shuttle')) {
-    return staff.shuttle === true;
-  }
-  if (sl.includes('flow')) {
-    return staff.flow === true || staff.shuttle === true;
-  }
-  return true;
+  return canWorkShift(staff, shiftId);
 }
 
 function maxConsecutiveEarlies(staffId, dayNum, fn_) {
-  // Count how many consecutive early shifts (EC/E) in the 3 days before dayNum
   let count = 0;
+  const earlyShifts = ['EC-TL','EC','EC-ESC','E-TL','E'];
   for (let d = dayNum - 1; d >= Math.max(0, dayNum - 3); d--) {
     const day = fn_.days[d];
     if (!day || day.isWeekend) break;
-    let hadEarly = false;
-    for (const shiftId of ['EC','E']) {
-      const def = SHIFT_DEFS[shiftId];
-      for (let si = 0; si < def.slots.length; si++) {
-        if ((state.roster[rKey(d, shiftId, si)]||[]).includes(staffId)) { hadEarly = true; break; }
-      }
-    }
+    let hadEarly = earlyShifts.some(sid =>
+      (state.roster[rKey(d, sid, 0)]||[]).includes(staffId)
+    );
     if (hadEarly) count++; else break;
   }
   return count;
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // QUICK FILL (legacy algorithm)
@@ -723,30 +766,43 @@ function quickFill() {
 // AI AUTOFILL
 // ═══════════════════════════════════════════════════════════
 async function aiAutofill() {
-  // AI autofill requires the file to be served, not opened from disk (file://)
   if (window.location.protocol === 'file:') {
-    const use = confirm(
-      '\u26a0\ufe0f AI Autofill cannot run when opened directly from disk (file://).\n\n' +
-      'It works when served via a web server or claude.ai.\n\n' +
-      'Run Quick Fill (offline) instead?'
-    );
+    const use = confirm('AI Autofill needs a web server (not file://).\n\nRun Quick Fill instead?');
     if (use) quickFill();
     return;
   }
 
   const fn_ = getFortnight(state.fortnight);
+  const periodStart = fn_.start.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
 
-  // Build context summary for AI
+  // Per-staff hours already scheduled this period
+  const hoursThisPeriod = {};
+  for (const s of allStaff()) {
+    hoursThisPeriod[s.id] = calcHours(s.id, null);
+  }
+
+  // Count MGT days already assigned this period for each CN
+  const mgtThisPeriod = {};
+  for (const s of allStaff().filter(x=>x.role==='CN')) {
+    mgtThisPeriod[s.id] = 0;
+    for (let d=0;d<28;d++) {
+      if ((state.roster[rKey(d,'MGT',0)]||[]).includes(s.id)) mgtThisPeriod[s.id]++;
+    }
+  }
+
   const staffSummary = allStaff().map(s => ({
     id: s.id,
     name: s.name,
     role: s.role,
-    fte: s.fte,
+    ftePeriod: s.fte,          // total hours target for this 28-day period
+    hoursScheduled: hoursThisPeriod[s.id],
+    hoursRemaining: s.fte - hoursThisPeriod[s.id],
     tl: s.tl,
     shuttle: s.shuttle,
     flow: s.flow,
     enShuttle: s.enShuttle,
-    targetPerFN: Math.round(s.fte / 2),
+    mgtDaysAssigned: mgtThisPeriod[s.id] || 0,
+    needsMgtDay: s.role === 'CN' && (mgtThisPeriod[s.id] || 0) < 1,
   }));
 
   const leaveSummary = [];
@@ -754,79 +810,107 @@ async function aiAutofill() {
     if (val) {
       const [staffId, dayNum] = key.split('|');
       const s = getStaff(staffId);
-      if (s) leaveSummary.push({ staff: s.name, day: parseInt(dayNum), type: val });
+      if (s) leaveSummary.push({ staff: s.name, staffId, day: parseInt(dayNum), type: val });
     }
   }
 
-  const prompt = `You are an expert hospital roster scheduler for Robina Hospital Transfer Unit.
+  // Build day map for context
+  const dayMap = fn_.days.map(d => ({
+    dayNum: d.dayNum,
+    date: d.dateStr,
+    dayName: d.dayName,
+    isWeekend: d.isWeekend,
+    fn: d.fn,
+    week: d.week,
+  }));
 
-FORTNIGHT: Days 0–13 (0=Mon FN1, 6=Sun FN1, 7=Mon FN2, 13=Sun FN2)
-Day types: Days 0,1,2,3,4 = Mon-Fri (FN1), Day 5,6 = Sat,Sun (FN1), Days 7,8,9,10,11 = Mon-Fri (FN2), Days 12,13 = Sat,Sun (FN2)
+  const prompt = `You are an expert hospital roster scheduler for Robina Hospital Transfer Unit, Brisbane.
+Schedule the ${periodStart} 28-day pay period (days 0–27).
 
-SHIFTS (weekdays only): EC(0600-1430,8h), E(0700-1530,8h), L(1100-1930,8h), AM(0700-1330,6h), LD(0830-1700,8h), EVE(1400-2200,8h)
-SHIFTS (weekends only): WD(0700-1530,8h), WA(1130-1930,8h), WN(1400-2200,8h)
+═══ DAY MAP ═══
+${dayMap.map(d=>`Day ${d.dayNum}: ${d.dayName} ${d.date} (${d.isWeekend?'WEEKEND':'weekday'}, FN${d.fn}, Wk${d.week})`).join('\n')}
 
-SLOTS PER SHIFT:
-- EC: [0]=Team Leader, [1]=RN/EN
-- E: [0]=Team Leader, [1]=RN/EN, [2]=Shuttle/Flow
-- L: [0]=RN/EN
-- AM: [0]=EN Shuttle
-- LD: [0]=RN/EN
-- EVE: [0]=RN/EN
-- WD: [0]=Team Leader, [1]=RN/EN, [2]=RN/EN
-- WA: [0]=RN/EN
-- WN: [0]=RN/EN
+═══ SHIFTS ═══
+WEEKDAY SHIFTS (Mon–Fri only):
+  EC-TL  0600–1430  8h  CN/RN Team Leader (AM — CN priority)
+  EC     0600–1430  8h  RN/EN floor
+  EC-ESC 0600–1430  8h  EN only (shuttle+floor)
+  E-TL   0700–1530  8h  CN/RN Team Leader (AM — CN priority)
+  E      0700–1530  8h  RN/EN floor
+  EG-PTS 0830–1700  8h  Shuttle RN (needs shuttle:true)
+  EJ     0930–1800  8h  Flow Nurse (needs flow:true)
+  LA     1200–2030  8h  RN/EN late (PREFERRED over EM-ESC)
+  EM-ESC 1100–1930  8h  EN only (shuttle+floor, use only if LA slots filled)
+  LE-TL  1300–2130  8h  RN TL only (no CNs)
+  LE     1300–2130  8h  RN/EN late
 
-CRITICAL RULES:
-1. ONE CN morning rule: only ONE CN can be Team Leader across EC AND E per day (not one each)
-2. CNs CANNOT work EVE (evening shift) on weekdays. CNs CAN work all weekend shifts.
-3. ENs can only fill EN Shuttle slots (AM[0]) and general RN/EN slots — NOT Team Leader slots
-4. Only staff with tl:true can fill Team Leader slots
-5. Only staff with enShuttle:true can fill EN Shuttle (AM) slots
-6. Only staff with shuttle:true or flow:true can fill Shuttle/Flow slots
-7. Max 3 consecutive EC or E shifts for any staff member
-8. Each staff works max 1 shift per day
-9. Target hours per FN: targetPerFN (half of fte). Do not exceed fte total.
-10. Prefer staff who need more hours (further from FTE target)
-11. Spread weekends fairly — each staff should get similar number of weekend days
-12. Staff on leave must not be scheduled
+WEEKEND SHIFTS (Sat–Sun only):
+  EE-TL  0730–1600  8h  CN/RN Team Leader
+  EE     0730–1600  8h  RN/EN
 
-STAFF:
+SPECIAL:
+  MGT    0700–1530  8h  CN Management day (each CN needs exactly 1 per 28-day period, counts toward FTE, not floor staff)
+
+═══ ELIGIBILITY ═══
+- CNs: EC-TL, EC, E-TL, E, EG-PTS, EJ, EE-TL, EE, MGT — NO late shifts (LA/EM-ESC/LE-TL/LE)
+- RNs: all shifts EXCEPT EC-ESC, EM-ESC, MGT
+- ENs: EC-ESC, EC, E, EM-ESC, LA, LE, EE only (no TL, no EG-PTS, no EJ unless flow:true)
+- TL shifts (EC-TL, E-TL, EE-TL, LE-TL): only staff with tl:true
+- EG-PTS: only RN/CN with shuttle:true
+- EJ: only staff with flow:true
+- EC-ESC / EM-ESC: only ENs (enShuttle:true)
+
+═══ CRITICAL RULES ═══
+1. ONE CN morning rule: max 1 CN as TL per day across EC-TL + E-TL combined
+2. If a CN is already on TL, additional CNs on that day go to EG-PTS, EJ, or EC (never late shifts)
+3. Each staff member: max 1 shift per day
+4. Max 3 consecutive AM shifts (EC-TL/EC/EC-ESC/E-TL/E) for any staff member
+5. Staff on leave or RDO must NOT be assigned
+6. MGT: each CN gets exactly 1 per period — on a weekday, not a leave day
+7. LA is preferred — schedule LA before EM-ESC on any given day
+8. FTE COMPLIANCE IS THE TOP PRIORITY: target each staff's ftePeriod hours exactly
+   - Staff with most hoursRemaining get priority for shifts
+   - Do not exceed ftePeriod for any staff member
+   - Spread shifts evenly across weeks to avoid end-of-period cramming
+9. Weekends: distribute fairly — each RN/EN should have similar weekend shifts across the period
+
+═══ STAFF ═══
 ${JSON.stringify(staffSummary, null, 2)}
 
-LEAVE:
+═══ LEAVE / RDO ═══
 ${JSON.stringify(leaveSummary, null, 2)}
 
-CURRENT PARTIAL ROSTER (already assigned — DO NOT overwrite these):
+═══ EXISTING ROSTER (do not overwrite) ═══
 ${JSON.stringify(state.roster, null, 2)}
 
-Generate a COMPLETE roster assignment for ALL unfilled slots.
-
-Return ONLY valid JSON with this structure:
+═══ OUTPUT FORMAT ═══
+Return ONLY valid JSON:
 {
   "assignments": [
-    { "dayNum": 0, "shiftId": "EC", "slotIdx": 0, "staffId": "cn1" },
+    { "dayNum": 0, "shiftId": "EC-TL", "slotIdx": 0, "staffId": "cn2" },
+    { "dayNum": 0, "shiftId": "EC", "slotIdx": 0, "staffId": "rn1" },
     ...
   ],
-  "notes": "brief summary of any issues or decisions made"
+  "fteAchievement": { "cn1": 48, "cn2": 64, ... },
+  "notes": "brief summary of FTE targets met, any gaps, MGT days assigned"
 }
 
-Include only NEW assignments (not already in the current roster). Be thorough — fill every slot possible.`;
+Fill every possible shift slot. Be thorough. Prioritise FTE compliance above all else.`;
 
-  // Show AI panel
   document.getElementById('aiPanel').style.display = 'block';
   document.getElementById('aiProgress').style.display = 'block';
-  setAIStatus('Sending roster data to AI...');
+  setAIStatus('Sending roster to AI...');
   addLog('=== AI AUTOFILL START ===', 'ai');
+  addLog(`Period: ${periodStart} (28 days)`, 'ai');
 
   try {
-    setAIStatus('AI is scheduling roster...');
+    setAIStatus('AI is scheduling the full period...');
     const response = await fetch('https://wispy-sun-c99e.aaadxk.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
+        max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -838,50 +922,47 @@ Include only NEW assignments (not already in the current roster). Be thorough �
     }
 
     const data = await response.json();
-    const text = data.content.map(c => c.text||'').join('');
+    const text = data.content.map(x => x.text||'').join('');
 
-    // Parse JSON from response
     setAIStatus('Parsing AI response...');
     let parsed;
     try {
       const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-      // Find JSON object
       const jsonMatch = clean.match(/\{[\s\S]*\}/);
       parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
     } catch(e) {
-      throw new Error('Could not parse AI response as JSON: ' + text.slice(0,200));
+      throw new Error('Could not parse AI response: ' + text.slice(0,300));
     }
 
-    // Apply assignments
+    // Apply assignments with full validation
     let applied = 0, skipped = 0;
-    const assignments = parsed.assignments || [];
-    for (const a of assignments) {
+    const assignedToday = {}; // track per-day per-staff
+    for (const a of (parsed.assignments||[])) {
       const key = rKey(a.dayNum, a.shiftId, a.slotIdx);
-      // Don't overwrite existing
       if (state.roster[key] && state.roster[key].length > 0) { skipped++; continue; }
-      // Validate staff exists
       const s = getStaff(a.staffId);
       if (!s) { addLog(`  Skip: staffId ${a.staffId} not found`, 'warn'); skipped++; continue; }
-      // Validate slot rules
       const def = SHIFT_DEFS[a.shiftId];
-      if (!def) { skipped++; continue; }
-      const slotLabel = def.slots[a.slotIdx] || '';
-      if (!canFillSlot(s, a.shiftId, slotLabel)) {
-        addLog(`  Skip: ${s.name} cannot fill ${a.shiftId}[${a.slotIdx}] (${slotLabel})`, 'warn');
-        skipped++;
-        continue;
-      }
+      if (!def) { addLog(`  Skip: shiftId ${a.shiftId} unknown`, 'warn'); skipped++; continue; }
+      // One shift per day
+      const todayKey = `${a.staffId}|${a.dayNum}`;
+      if (assignedToday[todayKey]) { addLog(`  Skip: ${s.name} already assigned day ${a.dayNum}`, 'warn'); skipped++; continue; }
+      // Eligibility
+      if (!canWorkShift(s, a.shiftId)) { addLog(`  Skip: ${s.name} cannot work ${a.shiftId}`, 'warn'); skipped++; continue; }
+      // Leave check
+      const leaveVal = state.leave[leaveKey(s.id, a.dayNum)];
+      if (leaveVal) { addLog(`  Skip: ${s.name} on ${leaveVal} day ${a.dayNum}`, 'warn'); skipped++; continue; }
       if (!state.roster[key]) state.roster[key] = [];
       state.roster[key].push(a.staffId);
+      assignedToday[todayKey] = true;
       applied++;
     }
 
     if (parsed.notes) addLog(`AI notes: ${parsed.notes}`, 'ai');
-    addLog(`Applied ${applied} assignments, skipped ${skipped}`, 'ok');
+    addLog(`Applied ${applied}, skipped ${skipped}`, 'ok');
     addLog('=== AI AUTOFILL COMPLETE ===', 'ai');
-
-    setAIStatus(`✅ Done! Applied ${applied} assignments.`);
-    setTimeout(() => { document.getElementById('aiPanel').style.display = 'none'; }, 3000);
+    setAIStatus(`✅ Done — ${applied} assignments applied`);
+    setTimeout(() => { document.getElementById('aiPanel').style.display = 'none'; }, 4000);
 
     saveState();
     renderRoster();
@@ -890,9 +971,9 @@ Include only NEW assignments (not already in the current roster). Be thorough �
 
   } catch(err) {
     addLog(`AI Error: ${err.message}`, 'err');
-    setAIStatus(`❌ Error: ${err.message}`);
+    setAIStatus(`❌ ${err.message}`);
     document.getElementById('aiProgress').style.display = 'none';
-    alert(`AI Autofill failed:\n${err.message}\n\nTry Quick Fill instead.`);
+    alert('AI Autofill failed: ' + err.message);
   }
 }
 
@@ -1025,16 +1106,24 @@ function openDayStaffModal(staffId, dayNum) {
   const day=fn_.days[dayNum];
   const s=getStaff(staffId);
   if(!s) return;
-  const applicable=day.isWeekend?WEEKEND_SHIFTS:WEEKDAY_SHIFTS;
-  const opts=applicable.map(shiftId=>{
+  const alreadyAssigned = isAssignedAnyShiftToday(staffId, dayNum);
+  const applicable=[...(day.isWeekend?WEEKEND_SHIFTS:WEEKDAY_SHIFTS),'MGT'];
+  let opts='';
+  for (const shiftId of applicable) {
     const def=SHIFT_DEFS[shiftId];
-    if(!canFillSlot(s,shiftId,def.slots[0])) return '';
-    return `<button class="btn btn-sm" style="border-left:3px solid ${def.color};margin:3px;width:calc(100% - 6px);text-align:left"
-      onclick="assignShiftToStaff('${staffId}',${dayNum},'${shiftId}');closeModal('assignModal')">
-      <b>${shiftId}</b> <span style="color:var(--txt2);font-size:10px">${def.time}</span>
-    </button>`;
-  }).join('');
-  document.getElementById('assignModalTitle').textContent=`${s.name} — ${day.dayName} ${day.dateStr}`;
+    if(!def) continue;
+    const eligible=canWorkShift(s,shiftId);
+    const disabled=alreadyAssigned||!eligible;
+    const reason=!eligible?'Not eligible':alreadyAssigned?'Already on shift':'';
+    const styleStr='border-left:3px solid '+def.color+';margin:3px;width:calc(100% - 6px);text-align:left;'+(disabled?'opacity:.35;cursor:not-allowed;':'cursor:pointer;');
+    const actionAttr=disabled
+      ? 'disabled title="'+reason+'"'
+      : 'onclick="assignShiftToStaff(\''+staffId+'\','+dayNum+',\''+shiftId+'\');closeModal(\'assignModal\')"';
+    opts+='<button class="btn btn-sm" style="'+styleStr+'" '+actionAttr+'>'
+      +'<b>'+shiftId+'</b> <span style="color:var(--txt2);font-size:10px">'+def.time+(disabled?' — '+reason:'')+'</span>'
+      +'</button>';
+  }
+  document.getElementById('assignModalTitle').textContent=s.name+' — '+day.dayName+' '+day.dateStr;
   document.getElementById('assignModalBody').innerHTML=opts||'<p style="color:var(--txt2);padding:8px">No eligible shifts</p>';
   document.getElementById('assignModal').classList.add('show');
 }
@@ -1214,48 +1303,71 @@ function deleteStaff(id) {
 // ═══════════════════════════════════════════════════════════
 function renderLeave() {
   const fn_ = getFortnight(state.fortnight);
-  let html = '';
-  for (const s of allStaff()) {
-    html += `<div class="leave-card">
-      <div class="leave-staff">${s.name} <span class="role-badge ${s.role}" style="font-size:9px">${s.role}</span></div>
-      <div class="leave-days">`;
-    for (const day of fn_.days) {
-      const key = leaveKey(s.id, day.dayNum);
-      const state_ = state.leave[key] || '';
-      const cls = state_ === 'leave' ? 'leave' : state_ === 'red' ? 'red' : '';
-      html += `<button class="leave-day-btn ${cls}" onclick="toggleLeave('${s.id}',${day.dayNum})"
-        title="${state_||'Available'}">${day.dayName[0]}${day.dateStr.split('/')[0]}</button>`;
+  const weeks = [1,2,3,4];
+
+  let html = `<div style="overflow-x:auto">
+  <table style="border-collapse:collapse;font-size:12px;min-width:100%">
+  <thead>`;
+
+  // One header row per week, with week label then days
+  for (const wk of weeks) {
+    const wkDays = fn_.days.filter(d=>d.week===wk);
+    const fn = wk<=2?1:2;
+    html += `<tr>
+      <th style="position:sticky;left:0;z-index:3;background:var(--bg3);padding:5px 10px;border:1px solid var(--bdr);min-width:150px;text-align:left;font-size:11px">
+        Staff &nbsp;<span style="color:var(--txt3);font-weight:400">FN${fn} — Week ${wk}</span>
+      </th>`;
+    for (const day of wkDays) {
+      const wknd = day.isWeekend;
+      const todayStyle = day.isToday ? 'background:rgba(88,166,255,.15);border-bottom:3px solid var(--acc);' : '';
+      const wkndStyle = wknd ? 'color:var(--org);background:rgba(210,153,34,.07);' : '';
+      html += `<th style="min-width:52px;padding:4px 3px;border:1px solid var(--bdr);text-align:center;${wkndStyle}${todayStyle}">
+        <div style="font-weight:700;font-size:11px">${day.dayName}</div>
+        <div style="font-size:10px;opacity:.75">${day.dateStr}</div>
+      </th>`;
     }
-    html += `</div></div>`;
+    html += `</tr>`;
+
+    // Staff rows for this week
+    for (const s of allStaff()) {
+      const roleCol = s.role==='CN'?'var(--cn)':s.role==='RN'?'var(--rn)':'var(--en)';
+      html += `<tr>
+        <td style="position:sticky;left:0;z-index:2;background:var(--bg2);border:1px solid var(--bdr);padding:3px 10px;white-space:nowrap">
+          <span style="color:${roleCol};font-weight:700;font-size:10px;margin-right:4px">${s.role}</span>
+          <span style="font-size:11px">${s.name}</span>
+        </td>`;
+      for (const day of wkDays) {
+        const key = leaveKey(s.id, day.dayNum);
+        const val = state.leave[key] || '';
+        const todayBg = day.isToday ? 'background:rgba(88,166,255,.06);' : '';
+        const wkndBg = day.isWeekend ? 'background:rgba(210,153,34,.04);' : '';
+        let bg='', label='<span style="color:var(--txt3);font-size:12px">·</span>';
+        if (val==='leave') { bg='background:rgba(248,81,73,.18);'; label='<span style="color:var(--red);font-size:10px;font-weight:700;letter-spacing:.5px">AL</span>'; }
+        else if (val==='red') { bg='background:rgba(210,153,34,.25);'; label='<span style="color:var(--org);font-size:10px;font-weight:700">RDO</span>'; }
+        html += `<td onclick="toggleLeave('${s.id}',${day.dayNum})" title="Click: · → AL → RDO → ·"
+          style="text-align:center;border:1px solid var(--bdr);padding:4px 2px;cursor:pointer;min-width:52px;${bg}${todayBg}${wkndBg}">${label}</td>`;
+      }
+      html += `</tr>`;
+    }
+
+    // Spacer between weeks
+    if (wk < 4) {
+      html += `<tr><td colspan="8" style="height:8px;background:var(--bg);border:none"></td></tr>`;
+    }
   }
+
+  html += `</thead></table></div>
+  <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;font-size:11px;align-items:center">
+    <span style="color:var(--txt2)">Click a cell to cycle:</span>
+    <span style="background:rgba(248,81,73,.18);color:var(--red);padding:3px 10px;border-radius:4px;font-weight:700">AL = Annual Leave</span>
+    <span style="background:rgba(210,153,34,.25);color:var(--org);padding:3px 10px;border-radius:4px;font-weight:700">RDO = Day Off</span>
+    <span style="color:var(--txt3);border:1px solid var(--bdr);padding:3px 10px;border-radius:4px">· = Working</span>
+    <span style="color:var(--txt2)">(Max 3 RDOs per week)</span>
+  </div>`;
+
   document.getElementById('leaveGrid').innerHTML = html;
 }
 
-function toggleLeave(staffId, dayNum) {
-  const key = leaveKey(staffId, dayNum);
-  const cur = state.leave[key] || '';
-  if (!cur) {
-    state.leave[key] = 'leave';
-  } else if (cur === 'leave') {
-    // Max 3 RDOs per week (weeks 1-4 of the 28-day period)
-    const fn_ = getFortnight(state.fortnight);
-    const day = fn_.days[dayNum];
-    const weekStart = (day.week - 1) * 7;
-    const weekEnd = weekStart + 6;
-    const rdoCount = fn_.days.filter(d => d.dayNum >= weekStart && d.dayNum <= weekEnd && state.leave[leaveKey(staffId, d.dayNum)] === 'red').length;
-    if (rdoCount >= 3) { alert('Max 3 RDO days per week'); return; }
-    state.leave[key] = 'red';
-  } else {
-    delete state.leave[key];
-  }
-  saveState();
-  renderLeave();
-  renderRoster();
-}
-
-// ═══════════════════════════════════════════════════════════
-// RENDER FTE
-// ═══════════════════════════════════════════════════════════
 function renderFTE() {
   const fn_ = getFortnight(state.fortnight);
   const fteView = state.fteView;
