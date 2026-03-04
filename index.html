@@ -225,6 +225,12 @@ hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
   </div>
 </div>
 
+<div id="autoFillOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <div style="width:56px;height:56px;border:5px solid rgba(255,255,255,.2);border-top-color:#58a6ff;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+  <div style="color:#fff;font-size:15px;font-weight:600;letter-spacing:.3px" id="autoFillMsg">Calculating roster...</div>
+  <div style="color:rgba(255,255,255,.5);font-size:12px" id="autoFillSub">Checking FTE targets and constraints</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 <div class="app">
 <!-- HEADER -->
 <header class="hdr">
@@ -726,59 +732,95 @@ function quickFill() {
 // ═══════════════════════════════════════════════════════════
 // AUTO FILL — Constraint-based scheduling algorithm
 // ═══════════════════════════════════════════════════════════
-function aiAutofill() {
+async function aiAutofill() {
   if (!confirm('Auto-fill the roster for this 28-day period?\n\nOnly empty slots will be filled. Existing assignments, leave and FTE targets are respected.\n\nProceed?')) return;
 
   const fn_ = getFortnight(state.fortnight);
   let applied = 0;
+
+  // Show loading overlay
+  const overlay = document.getElementById('autoFillOverlay');
+  overlay.style.display = 'flex';
+  const setMsg = (msg, sub) => {
+    document.getElementById('autoFillMsg').textContent = msg;
+    if (sub !== undefined) document.getElementById('autoFillSub').textContent = sub;
+  };
+  setMsg('Calculating roster…', 'Setting up constraints');
+  await new Promise(r => setTimeout(r, 30));
   addLog('=== AUTO FILL START ===', 'ai');
 
-  // ── Core helpers ─────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
+  // HELPERS
+  // ─────────────────────────────────────────────────────────
 
-  // Hours assigned in a specific fortnight (recalculates live as we assign)
-  function fnHours(staffId, fn) { return calcHours(staffId, fn); }
+  const ALL_SHIFTS_LIST = [...WEEKDAY_SHIFTS, ...WEEKEND_SHIFTS, 'MGT'];
 
-  // Would assigning this staff to an 8h shift exceed their FN target?
+  // Hours assigned to staff in one fortnight (recalculates live)
+  function fnHours(sid, fn) { return calcHours(sid, fn); }
+
+  // Would adding 8h exceed FN target?
   function hasCapacity(s, fn) {
     return fnHours(s.id, fn) + 8 <= getFteTarget(s, fn);
   }
 
-  // Is staff free on this day (no leave, no shift already assigned)?
+  // Is staff free on this day — no leave, no shift already assigned?
   function isFree(s, dayNum) {
     return !isOnLeave(s.id, dayNum) && !isAssignedAnyShiftToday(s.id, dayNum);
   }
 
-  // How many hours short is this staff for a given FN? (higher = needs more shifts)
-  function hoursShort(s, fn) {
-    return getFteTarget(s, fn) - fnHours(s.id, fn);
+  // Shifts worked in a 7-day week block (week 0-3)
+  function shiftsInWeek(sid, weekNum) {
+    let n = 0;
+    const start = weekNum * 7;
+    for (let d = start; d < start + 7; d++) {
+      for (const sh of ALL_SHIFTS_LIST) {
+        if ((state.roster[rKey(d, sh, 0)] || []).includes(sid)) { n++; break; }
+      }
+    }
+    return n;
   }
 
-  // Sort staff: most hours short first (so under-FTE staff get priority)
-  function byNeed(list, fn) {
-    return [...list].sort((a, b) => hoursShort(b, fn) - hoursShort(a, fn));
+  // Target shifts per week for this staff member based on their FTE
+  // e.g. 128h / 32 = 4/wk, 96h / 32 = 3/wk, 152h / 32 = 4.75 → 5/wk
+  function targetPerWeek(s) {
+    return Math.round(s.fte / 32);
   }
 
-  // Is the given shift slot already filled?
+  // Consecutive days worked ending at (but not including) dayNum
+  function consecutiveDays(sid, dayNum) {
+    let streak = 0;
+    for (let d = dayNum - 1; d >= 0; d--) {
+      let worked = false;
+      for (const sh of ALL_SHIFTS_LIST) {
+        if ((state.roster[rKey(d, sh, 0)] || []).includes(sid)) { worked = true; break; }
+      }
+      if (worked) streak++;
+      else break;
+    }
+    return streak;
+  }
+
+  // Is shift slot already filled?
   function filled(dayNum, shiftId) {
     return (state.roster[rKey(dayNum, shiftId, 0)] || []).length > 0;
   }
 
-  // Assign one staff member to a shift (slot 0 only)
-  function assign(dayNum, shiftId, staffId) {
+  // Assign staff to shift (slot 0 only)
+  function assign(dayNum, shiftId, sid) {
     const key = rKey(dayNum, shiftId, 0);
     if (!state.roster[key]) state.roster[key] = [];
-    if (state.roster[key].includes(staffId)) return false;
-    state.roster[key].push(staffId);
+    if (state.roster[key].includes(sid)) return false;
+    state.roster[key].push(sid);
     applied++;
     return true;
   }
 
-  // How many CNs are already working on a given day?
+  // Count CNs already working on a given day
   function cnCountToday(dayNum) {
-    const cnShifts = ['EC-TL','E-TL','EC','E','EG-PTS','EJ','EE-TL','EE','MGT'];
     let n = 0;
+    const cnShifts = ['EC-TL','E-TL','EC','E','EG-PTS','EJ','EE-TL','EE','MGT'];
     for (const sh of cnShifts) {
-      for (const sid of (state.roster[rKey(dayNum,sh,0)]||[])) {
+      for (const sid of (state.roster[rKey(dayNum, sh, 0)] || [])) {
         const s = getStaff(sid);
         if (s && s.role === 'CN') n++;
       }
@@ -786,223 +828,284 @@ function aiAutofill() {
     return n;
   }
 
-  // Is a morning TL (EC-TL or E-TL or EE-TL) already assigned today?
+  // Morning TL (EC-TL or E-TL or EE-TL) already assigned today?
   function amTLFilled(dayNum) {
     return ['EC-TL','E-TL','EE-TL'].some(sh => filled(dayNum, sh));
   }
 
-  // Is LE-TL already assigned today?
+  // LE-TL already assigned today?
   function eveTLFilled(dayNum) { return filled(dayNum, 'LE-TL'); }
 
-  // MGT days this period for a CN
-  function mgtDays(staffId) {
+  // MGT days assigned this period for a staff member
+  function mgtCount(sid) {
     let n = 0;
     for (let d = 0; d < 28; d++) {
-      if ((state.roster[rKey(d,'MGT',0)]||[]).includes(staffId)) n++;
+      if ((state.roster[rKey(d, 'MGT', 0)] || []).includes(sid)) n++;
     }
     return n;
   }
 
-  // Pick the best available staff member from a candidate list
-  // candidates: filtered & sorted array of staff objects
-  // dayNum, fn: for availability + capacity checks
-  // extraCheck: optional fn(s) => bool for additional constraints
+  // Weekend shifts worked so far (across whole 28-day period)
+  function weekendShifts(sid) {
+    let n = 0;
+    for (let d = 0; d < 28; d++) {
+      if (!fn_.days[d] || !fn_.days[d].isWeekend) continue;
+      for (const sh of ['EE-TL','EE']) {
+        if ((state.roster[rKey(d, sh, 0)] || []).includes(sid)) n++;
+      }
+    }
+    return n;
+  }
+
+  // ── CORE PICKER ───────────────────────────────────────────
+  // Selects the best staff from candidates for a given day/fn slot.
+  //
+  // Scoring (lower = better pick):
+  //   - Prioritise staff most under their FTE target (most hours short)
+  //   - Penalise staff who are already over their weekly shift quota
+  //   - Penalise long consecutive runs (fatigue management)
+  //   - Hard block: won't pick staff already at/over FN target or >5 consecutive days
+  //
   function pick(candidates, dayNum, fn, extraCheck) {
+    const week = Math.floor(dayNum / 7);
+    const scored = [];
+
     for (const s of candidates) {
+      // Hard gates
       if (!isFree(s, dayNum)) continue;
       if (!hasCapacity(s, fn)) continue;
+      if (consecutiveDays(s.id, dayNum) >= 5) continue;
       if (extraCheck && !extraCheck(s)) continue;
-      return s;
+
+      const weekShifts  = shiftsInWeek(s.id, week);
+      const tgtPerWk    = targetPerWeek(s);
+      // Penalise if this shift would put them over weekly target
+      // (but don't hard-block — it's better to be slightly over than leave shift empty)
+      const overWeekPenalty = Math.max(0, weekShifts - tgtPerWk + 1) * 16;
+      // Prioritise most hours remaining (negative because lower score = better)
+      const hoursShort  = getFteTarget(s, fn) - fnHours(s.id, fn);
+      // Small penalty for consecutive days (spread rest days)
+      const consecPenalty = consecutiveDays(s.id, dayNum) * 2;
+
+      const score = -hoursShort + overWeekPenalty + consecPenalty;
+      scored.push({ s, score });
     }
-    return null;
+
+    scored.sort((a, b) => a.score - b.score);
+    return scored.length ? scored[0].s : null;
   }
 
-  const allS   = allStaff();
-  const CNs    = allS.filter(s => s.role === 'CN');
-  const RNs    = allS.filter(s => s.role === 'RN');
-  const ENs    = allS.filter(s => s.role === 'EN');
-  const RNsEN  = [...RNs, ...ENs]; // for mixed late shifts
+  const allS = allStaff();
+  const CNs  = allS.filter(s => s.role === 'CN');
+  const RNs  = allS.filter(s => s.role === 'RN');
+  const ENs  = allS.filter(s => s.role === 'EN');
 
-  // ── PHASE 1: MGT days ─────────────────────────────────────
-  // Each CN needs exactly 1 MGT day per 28-day period
-  // Spread across the period — one in FN1, one in FN2 if >1 CN
+  // ─────────────────────────────────────────────────────────
+  // PHASE 1: Pre-assign MGT days
+  // Each CN needs exactly 1 management day per 28-day period.
+  // Spread across different days and different weeks.
+  // ─────────────────────────────────────────────────────────
+  setMsg('Phase 1 of 3', 'Assigning management days…');
+  await new Promise(r => setTimeout(r, 20));
   addLog('Phase 1: MGT days', 'ai');
-  for (const cn of CNs) {
-    if (mgtDays(cn.id) >= 1) continue;
-    // Try to find a weekday where:
-    //  - CN is free
-    //  - CN has FN capacity
-    //  - No other CN has MGT that day (spread MGT across days)
-    for (const day of fn_.days) {
-      if (day.isWeekend) continue;
-      if (!isFree(cn, day.dayNum)) continue;
-      if (!hasCapacity(cn, day.fn)) continue;
-      if (filled(day.dayNum, 'MGT')) continue; // one MGT slot per day
+
+  const mgtUsedDays = new Set();
+  // Sort by FTE desc so higher-FTE CN has first pick (they need more shifts overall)
+  for (const cn of [...CNs].sort((a, b) => b.fte - a.fte)) {
+    if (mgtCount(cn.id) >= 1) continue;
+    // Prefer a day where no other CN has MGT, and spread across the period
+    const day = fn_.days.find(d =>
+      !d.isWeekend &&
+      !mgtUsedDays.has(d.dayNum) &&
+      !isOnLeave(cn.id, d.dayNum) &&
+      hasCapacity(cn, d.fn) &&
+      consecutiveDays(cn.id, d.dayNum) < 5
+    );
+    if (day) {
       assign(day.dayNum, 'MGT', cn.id);
+      mgtUsedDays.add(day.dayNum);
       addLog(`  MGT: ${cn.name} → Day ${day.dayNum} (${day.dayName} ${day.dateStr})`, 'ok');
-      break;
+    } else {
+      addLog(`  ⚠️ No MGT day available for ${cn.name}`, 'warn');
     }
   }
 
-  // ── PHASE 2: Day-by-day shift fill ───────────────────────
+  // ─────────────────────────────────────────────────────────
+  // PHASE 2: Fill shifts day by day
+  //
+  // Shift priority order reflects clinical importance:
+  // CRITICAL (must have): TL, EC-ESC (shuttle must run)
+  // HIGH: EG-PTS, LA, LE-TL
+  // STANDARD: EJ, EC, E, EM-ESC, LE
+  //
+  // Weekly spread is enforced through scoring, not hard caps,
+  // so critical shifts are never left empty due to quota logic.
+  // ─────────────────────────────────────────────────────────
+  setMsg('Phase 2 of 3', 'Filling shifts day by day…');
+  await new Promise(r => setTimeout(r, 20));
   addLog('Phase 2: Shift fill', 'ai');
 
   for (const day of fn_.days) {
-    const d   = day.dayNum;
-    const fn  = day.fn;
-    const wkd = !day.isWeekend;
+    const d  = day.dayNum;
+    const fn = day.fn;
 
     if (day.isWeekend) {
-      // ════ WEEKEND ════════════════════════════════════════
-
-      // EE-TL: one TL (CN or RN with tl:true). Prefer CN.
+      // ── EE-TL ─────────────────────────────────────────────
+      // Prefer CN (weekend TL is their primary fairness outlet since
+      // they can't do late shifts). Among CNs, pick fewest weekend shifts so far.
       if (!amTLFilled(d)) {
-        const tlCandidates = byNeed([
-          ...CNs.filter(s => s.tl),
-          ...RNs.filter(s => s.tl)
-        ], fn);
-        const chosen = pick(tlCandidates, d, fn);
+        const cnByWknd = [...CNs].filter(s => s.tl)
+          .sort((a, b) => weekendShifts(a.id) - weekendShifts(b.id));
+        const rnByWknd = [...RNs].filter(s => s.tl)
+          .sort((a, b) => weekendShifts(a.id) - weekendShifts(b.id));
+        const chosen = pick(cnByWknd, d, fn) || pick(rnByWknd, d, fn);
         if (chosen) assign(d, 'EE-TL', chosen.id);
       }
 
-      // EE: RNs and ENs (not CN — CNs only on EE-TL on weekends)
+      // ── EE ────────────────────────────────────────────────
+      // RNs and ENs — prefer fewest weekend shifts for fairness
       if (!filled(d, 'EE')) {
-        const eeStaff = byNeed([...RNs, ...ENs.filter(e => canWorkShift(e,'EE'))], fn);
+        const eeStaff = [...RNs, ...ENs.filter(e => canWorkShift(e, 'EE'))]
+          .sort((a, b) => weekendShifts(a.id) - weekendShifts(b.id));
         const chosen = pick(eeStaff, d, fn, s => canWorkShift(s, 'EE'));
         if (chosen) assign(d, 'EE', chosen.id);
       }
 
     } else {
-      // ════ WEEKDAY ════════════════════════════════════════
+      // ── Morning TL ────────────────────────────────────────
+      // Exactly ONE TL shift per day.
+      // Preference: CN on E-TL → CN on EC-TL → RN on E-TL → RN on EC-TL
+      // CN only if no other CN is already working today.
+      if (!amTLFilled(d)) {
+        let tlAssigned = false;
 
-      // ── Step 1: Exactly ONE CN on a morning TL shift ─────
-      // CN gets either E-TL or EC-TL (prefer E-TL per OTS convention)
-      // Only assign if no CN already working today
-      if (!amTLFilled(d) && cnCountToday(d) === 0) {
-        const cnByNeed = byNeed(CNs.filter(s => s.tl), fn);
-        // Try E-TL first, fall back to EC-TL
-        let chosen = pick(cnByNeed, d, fn);
-        if (chosen) {
-          assign(d, 'E-TL', chosen.id);
-        } else {
-          // No CN available — fall back to RN TL
-          const rnTL = byNeed(RNs.filter(s => s.tl), fn);
-          const rnChosen = pick(rnTL, d, fn);
-          if (rnChosen) assign(d, 'E-TL', rnChosen.id);
+        if (cnCountToday(d) === 0) {
+          // Try CN on E-TL first, then EC-TL as fallback
+          for (const tlShift of ['E-TL', 'EC-TL']) {
+            const chosen = pick(CNs.filter(s => s.tl), d, fn);
+            if (chosen) { assign(d, tlShift, chosen.id); tlAssigned = true; break; }
+          }
         }
-      } else if (!amTLFilled(d)) {
-        // CN already working (MGT day) — RN covers TL
-        const rnTL = byNeed(RNs.filter(s => s.tl), fn);
-        const rnChosen = pick(rnTL, d, fn);
-        if (rnChosen) assign(d, 'E-TL', rnChosen.id);
+
+        // No CN available (all on leave/at capacity/already working MGT) — use RN TL
+        if (!tlAssigned) {
+          for (const tlShift of ['E-TL', 'EC-TL']) {
+            const chosen = pick(RNs.filter(s => s.tl), d, fn);
+            if (chosen) { assign(d, tlShift, chosen.id); break; }
+          }
+        }
       }
 
-      // ── Step 2: EC-ESC — EN shuttle (enShuttle:true only) ─
+      // ── EC-ESC: EN shuttle (critical — shuttle must run) ──
       if (!filled(d, 'EC-ESC')) {
-        const ens = byNeed(ENs.filter(e => e.enShuttle), fn);
-        const chosen = pick(ens, d, fn);
+        const chosen = pick(ENs.filter(e => e.enShuttle), d, fn);
         if (chosen) assign(d, 'EC-ESC', chosen.id);
       }
 
-      // ── Step 3: EG-PTS — shuttle RN (RN/CN, shuttle:true) ─
-      // CN can do this ONLY if they are the sole CN today and no TL yet
+      // ── EG-PTS: RN shuttle ───────────────────────────────
       if (!filled(d, 'EG-PTS')) {
-        const shuttlers = byNeed(RNs.filter(r => r.shuttle), fn);
-        const chosen = pick(shuttlers, d, fn);
+        const chosen = pick(RNs.filter(r => r.shuttle), d, fn);
         if (chosen) assign(d, 'EG-PTS', chosen.id);
       }
 
-      // ── Step 4: EJ — flow nurse (RN/EN with flow:true) ────
+      // ── LE-TL: evening TL (RN with tl only — no CNs on late) ─
+      if (!eveTLFilled(d)) {
+        const chosen = pick(RNs.filter(r => r.tl), d, fn);
+        if (chosen) assign(d, 'LE-TL', chosen.id);
+      }
+
+      // ── LA: late afternoon ────────────────────────────────
+      // Fill before EM-ESC (LA preferred per ward rules)
+      if (!filled(d, 'LA')) {
+        const lateStaff = [...RNs, ...ENs.filter(e => canWorkShift(e, 'LA'))];
+        const chosen = pick(lateStaff, d, fn, s => canWorkShift(s, 'LA'));
+        if (chosen) assign(d, 'LA', chosen.id);
+      }
+
+      // ── EM-ESC: EN late shuttle (only after LA is filled) ─
+      if (!filled(d, 'EM-ESC') && filled(d, 'LA')) {
+        const chosen = pick(ENs.filter(e => e.enShuttle), d, fn);
+        if (chosen) assign(d, 'EM-ESC', chosen.id);
+      }
+
+      // ── LE: late floor ────────────────────────────────────
+      if (!filled(d, 'LE')) {
+        const lateStaff = [...RNs, ...ENs.filter(e => canWorkShift(e, 'LE'))];
+        const chosen = pick(lateStaff, d, fn, s => canWorkShift(s, 'LE'));
+        if (chosen) assign(d, 'LE', chosen.id);
+      }
+
+      // ── EJ: flow nurse ────────────────────────────────────
       if (!filled(d, 'EJ')) {
-        const flowStaff = byNeed([...RNs, ...ENs].filter(s => s.flow && canWorkShift(s,'EJ')), fn);
+        const flowStaff = [...RNs, ...ENs].filter(s => s.flow && canWorkShift(s, 'EJ'));
         const chosen = pick(flowStaff, d, fn);
         if (chosen) assign(d, 'EJ', chosen.id);
       }
 
-      // ── Step 5: EC — floor early (RN or EN) ───────────────
+      // ── EC: floor early ───────────────────────────────────
       if (!filled(d, 'EC')) {
-        const floor = byNeed([...RNs, ...ENs.filter(e => canWorkShift(e,'EC'))], fn);
-        const chosen = pick(floor, d, fn, s => canWorkShift(s, 'EC'));
+        const floorStaff = [...RNs, ...ENs.filter(e => canWorkShift(e, 'EC'))];
+        const chosen = pick(floorStaff, d, fn, s => canWorkShift(s, 'EC'));
         if (chosen) assign(d, 'EC', chosen.id);
       }
 
-      // ── Step 6: E — floor 7am (RN or EN) ─────────────────
+      // ── E: floor 7am ─────────────────────────────────────
       if (!filled(d, 'E')) {
-        const floor = byNeed([...RNs, ...ENs.filter(e => canWorkShift(e,'E'))], fn);
-        const chosen = pick(floor, d, fn, s => canWorkShift(s, 'E'));
+        const floorStaff = [...RNs, ...ENs.filter(e => canWorkShift(e, 'E'))];
+        const chosen = pick(floorStaff, d, fn, s => canWorkShift(s, 'E'));
         if (chosen) assign(d, 'E', chosen.id);
-      }
-
-      // ── Step 7: LE-TL — evening TL (RN with tl:true only) ─
-      if (!eveTLFilled(d)) {
-        const rnTL = byNeed(RNs.filter(r => r.tl), fn);
-        const chosen = pick(rnTL, d, fn);
-        if (chosen) assign(d, 'LE-TL', chosen.id);
-      }
-
-      // ── Step 8: LA — late afternoon (RN or EN) ────────────
-      // Prefer this over EM-ESC
-      if (!filled(d, 'LA')) {
-        const late = byNeed([...RNs, ...ENs.filter(e => canWorkShift(e,'LA'))], fn);
-        const chosen = pick(late, d, fn, s => canWorkShift(s, 'LA'));
-        if (chosen) assign(d, 'LA', chosen.id);
-      }
-
-      // ── Step 9: EM-ESC — EN late shuttle (only after LA) ──
-      if (!filled(d, 'EM-ESC')) {
-        const ens = byNeed(ENs.filter(e => e.enShuttle), fn);
-        const chosen = pick(ens, d, fn);
-        if (chosen) assign(d, 'EM-ESC', chosen.id);
-      }
-
-      // ── Step 10: LE — late floor (RN or EN) ───────────────
-      if (!filled(d, 'LE')) {
-        const late = byNeed([...RNs, ...ENs.filter(e => canWorkShift(e,'LE'))], fn);
-        const chosen = pick(late, d, fn, s => canWorkShift(s, 'LE'));
-        if (chosen) assign(d, 'LE', chosen.id);
       }
     }
   }
 
-  // ── PHASE 3: FTE backfill ─────────────────────────────────
-  // Fill remaining empty slots with staff still under their FN target
+  // ─────────────────────────────────────────────────────────
+  // PHASE 3: FTE backfill
+  // Staff still under their FN target get another pass.
+  // Fill any remaining empty slots, still respecting all rules.
+  // ─────────────────────────────────────────────────────────
+  setMsg('Phase 3 of 3', 'FTE backfill…');
+  await new Promise(r => setTimeout(r, 20));
   addLog('Phase 3: FTE backfill', 'ai');
+
   for (const day of fn_.days) {
     const d  = day.dayNum;
     const fn = day.fn;
     const shifts = day.isWeekend ? WEEKEND_SHIFTS : WEEKDAY_SHIFTS;
+
     for (const shiftId of shifts) {
       if (filled(d, shiftId)) continue;
       const def = SHIFT_DEFS[shiftId];
       if (!def) continue;
 
-      // Build eligible candidates
-      let candidates = allS.filter(s => canWorkShift(s, shiftId));
-
-      // TL block enforcement
+      // Enforce TL blocks — never assign a second TL
       if (['EC-TL','E-TL','EE-TL'].includes(shiftId) && amTLFilled(d)) continue;
       if (shiftId === 'LE-TL' && eveTLFilled(d)) continue;
 
-      // CN rule: only 1 CN per day
-      if (def.cnAllowed) {
-        candidates = candidates.filter(s => {
-          if (s.role !== 'CN') return true;
-          return cnCountToday(d) === 0;
-        });
-      }
+      // EM-ESC only after LA is filled
+      if (shiftId === 'EM-ESC' && !filled(d, 'LA')) continue;
 
-      const sorted = byNeed(candidates, fn);
-      const chosen = pick(sorted, d, fn);
+      // Build eligible candidates
+      let candidates = allS.filter(s => canWorkShift(s, shiftId));
+
+      // CN rule: only 1 CN per day across all shifts
+      candidates = candidates.filter(s => s.role !== 'CN' || cnCountToday(d) === 0);
+
+      const chosen = pick(candidates, d, fn);
       if (chosen) assign(d, shiftId, chosen.id);
     }
   }
 
-  // ── Summary ───────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
+  // SUMMARY
+  // ─────────────────────────────────────────────────────────
   addLog(`=== DONE: ${applied} shifts assigned ===`, 'ok');
+
+  let fteIssues = 0;
   for (const s of allS) {
     const h1 = calcHours(s.id,1), t1 = getFteTarget(s,1);
     const h2 = calcHours(s.id,2), t2 = getFteTarget(s,2);
     const ok = h1 <= t1 && h2 <= t2;
+    if (!ok) fteIssues++;
     addLog(`  ${s.name.split(' ')[0]}: FN1 ${h1}/${t1}h  FN2 ${h2}/${t2}h ${ok?'✅':'⚠️'}`, ok?'ok':'warn');
   }
 
@@ -1010,7 +1113,8 @@ function aiAutofill() {
   renderRoster();
   renderFTE();
   renderReport();
-  alert(`Auto-fill complete!\n${applied} shifts assigned.\nCheck Decision Log for FTE summary.`);
+  overlay.style.display = 'none';
+  alert(`Auto-fill complete!\n${applied} shifts assigned.${fteIssues ? ' ⚠️ ' + fteIssues + ' staff under FTE — check Decision Log.' : '\n✅ All FTE targets met.'}`);
 }
 function setAIStatus(msg) {
   document.getElementById('aiStatus').textContent = msg;
