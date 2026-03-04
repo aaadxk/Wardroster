@@ -876,7 +876,7 @@ Fill every possible shift slot. Be thorough. Prioritise FTE compliance above all
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6-20250514',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -971,95 +971,225 @@ function renderRoster() {
   const fn_ = getFortnight(state.fortnight);
   document.getElementById('fnLabel').textContent = fn_.label;
 
-  // Week group header spans
-  const weekCols = [0,1,2,3].map(w => fn_.days.filter(d=>d.week===w+1).length);
+  // ── Layout: shifts as rows, days as columns ──────────────────────────────
+  // Staff hours summary at top (FN1 | FN2, colour-coded)
+  const staff = allStaff();
 
-  let html = `<div class="grid-wrap"><table class="roster" style="font-size:11px;border-collapse:collapse">
-  <thead>
-    <tr>
-      <th style="position:sticky;top:0;left:0;z-index:5;background:var(--bg3);min-width:120px;padding:4px 8px;border:1px solid var(--bdr)">Staff</th>
-      <th style="position:sticky;top:0;z-index:4;background:var(--bg3);min-width:46px;padding:4px;text-align:center;border:1px solid var(--bdr)">Hrs</th>`;
+  // Build hours header block
+  let hrsHtml = '<div style="overflow-x:auto;margin-bottom:8px"><table style="border-collapse:collapse;font-size:11px;width:auto">';
+  hrsHtml += '<thead><tr>';
+  hrsHtml += '<th style="position:sticky;left:0;z-index:3;background:var(--bg3);border:1px solid var(--bdr);padding:4px 10px;min-width:140px;text-align:left;font-size:10px;color:var(--txt2)">Staff</th>';
+  hrsHtml += '<th style="border:1px solid var(--bdr);background:var(--bg3);padding:4px 8px;text-align:center;font-size:10px;color:var(--txt2);min-width:80px">FN1 Hrs</th>';
+  hrsHtml += '<th style="border:1px solid var(--bdr);background:var(--bg3);padding:4px 8px;text-align:center;font-size:10px;color:var(--txt2);min-width:80px">FN2 Hrs</th>';
+  hrsHtml += '</tr></thead><tbody>';
 
-  const weekLabels = ['WEEK 1','WEEK 2','WEEK 3','WEEK 4'];
+  for (const role of ['CN','RN','EN']) {
+    const group = staff.filter(s=>s.role===role);
+    if (!group.length) continue;
+    const roleCol = role==='CN'?'var(--cn)':role==='RN'?'var(--rn)':'var(--en)';
+    hrsHtml += `<tr><td colspan="3" style="background:var(--bg3);padding:2px 10px;font-size:10px;font-weight:700;color:${roleCol};letter-spacing:.5px;border:1px solid var(--bdr)">${role}s</td></tr>`;
+    for (const s of group) {
+      const h1 = calcHours(s.id, 1);
+      const h2 = calcHours(s.id, 2);
+      const t1 = getFteTarget(s, 1);
+      const t2 = getFteTarget(s, 2);
+      // FN1 colour: green=met, red=over, blue=under
+      const c1 = h1 > t1 ? 'var(--red)' : h1 >= t1 ? 'var(--grn)' : 'var(--acc)';
+      const c2 = h2 > t2 ? 'var(--red)' : h2 >= t2 ? 'var(--grn)' : 'var(--acc)';
+      const bg1 = h1 > t1 ? 'rgba(248,81,73,.1)' : h1 >= t1 ? 'rgba(63,185,80,.1)' : 'rgba(88,166,255,.08)';
+      const bg2 = h2 > t2 ? 'rgba(248,81,73,.1)' : h2 >= t2 ? 'rgba(63,185,80,.1)' : 'rgba(88,166,255,.08)';
+      const shortName = s.name.split(' ').slice(0,2).join(' ');
+      hrsHtml += `<tr>
+        <td style="position:sticky;left:0;z-index:2;background:var(--bg2);border:1px solid var(--bdr);padding:3px 10px;white-space:nowrap">
+          <span style="color:${roleCol};font-size:11px;font-weight:600">${shortName}</span>
+        </td>
+        <td style="border:1px solid var(--bdr);padding:3px 8px;text-align:center;background:${bg1}">
+          <span style="color:${c1};font-weight:700;font-size:11px">${h1}h</span>
+          <span style="color:var(--txt3);font-size:10px"> /${t1}h</span>
+        </td>
+        <td style="border:1px solid var(--bdr);padding:3px 8px;text-align:center;background:${bg2}">
+          <span style="color:${c2};font-weight:700;font-size:11px">${h2}h</span>
+          <span style="color:var(--txt3);font-size:10px"> /${t2}h</span>
+        </td>
+      </tr>`;
+    }
+  }
+  hrsHtml += '</tbody></table>';
+  hrsHtml += `<div style="display:flex;gap:12px;padding:6px 0;font-size:10px;align-items:center">
+    <span style="color:var(--grn);font-weight:700">● Met</span>
+    <span style="color:var(--red);font-weight:700">● Over</span>
+    <span style="color:var(--acc);font-weight:700">● Under</span>
+    <span style="color:var(--txt3)">(per fortnight)</span>
+  </div></div>`;
+
+  // ── Roster grid: shifts as rows, days as columns ──────────────────────────
+  let html = '<div class="grid-wrap"><table class="roster" style="font-size:11px;border-collapse:collapse"><thead>';
+
+  // Week group headers
+  html += '<tr><th style="position:sticky;top:0;left:0;z-index:5;background:var(--bg3);border:1px solid var(--bdr);padding:4px 8px;min-width:110px">Shift</th>';
+  const weekLabels = ['FN1 — Week 1','FN1 — Week 2','FN2 — Week 3','FN2 — Week 4'];
   for (let w=0;w<4;w++) {
-    html += `<th colspan="${weekCols[w]}" style="position:sticky;top:0;z-index:4;background:var(--bg4,var(--bg2));border:1px solid var(--bdr);text-align:center;padding:3px;font-size:10px;color:var(--txt2);letter-spacing:.5px">${weekLabels[w]}</th>`;
+    const wkDays = fn_.days.filter(d=>d.week===w+1);
+    html += `<th colspan="${wkDays.length}" style="position:sticky;top:0;z-index:4;background:var(--bg4,var(--bg2));border:1px solid var(--bdr);text-align:center;padding:3px;font-size:10px;color:var(--txt2);letter-spacing:.5px">${weekLabels[w]}</th>`;
   }
   html += '</tr><tr>';
-  html += `<th style="position:sticky;top:26px;left:0;z-index:5;background:var(--bg3);border:1px solid var(--bdr);padding:3px 8px;font-size:10px;color:var(--txt2)">Name</th>`;
-  html += `<th style="position:sticky;top:26px;z-index:4;background:var(--bg3);border:1px solid var(--bdr);padding:3px;text-align:center;font-size:10px;color:var(--txt2)">FTE</th>`;
-
+  html += '<th style="position:sticky;top:26px;left:0;z-index:5;background:var(--bg3);border:1px solid var(--bdr);padding:3px 8px;font-size:10px;color:var(--txt2)">Shift / Time</th>';
   for (const day of fn_.days) {
     const wknd = day.isWeekend;
     const todayBorder = day.isToday ? 'border-bottom:3px solid var(--acc);' : '';
-    const wkndStyle = wknd ? 'background:rgba(210,153,34,.08);color:var(--org);' : '';
-    html += `<th ${day.isToday?'data-today="true"':''} style="position:sticky;top:26px;z-index:4;min-width:36px;max-width:40px;padding:3px 2px;text-align:center;border:1px solid var(--bdr);${wkndStyle}${todayBorder}">
-      <div style="font-weight:700;font-size:10px">${day.dayName.slice(0,2)}</div>
+    const wkndStyle = wknd ? 'background:rgba(210,153,34,.08);color:var(--org);' : 'background:var(--bg3);';
+    html += `<th ${day.isToday?'data-today="true"':''} style="position:sticky;top:26px;z-index:4;min-width:72px;max-width:90px;padding:3px 2px;text-align:center;border:1px solid var(--bdr);${wkndStyle}${todayBorder}">
+      <div style="font-weight:700;font-size:10px">${day.dayName}</div>
       <div style="font-size:9px;opacity:.8">${day.dateStr}</div>
     </th>`;
   }
   html += '</tr></thead><tbody>';
 
-  for (const role of ['CN','RN','EN']) {
-    const group = state.staff.filter(s=>s.role===role&&s.name.trim());
-    if (!group.length) continue;
-    const roleCol = role==='CN'?'var(--cn)':role==='RN'?'var(--rn)':'var(--en)';
-    html += `<tr><td colspan="${fn_.days.length+2}" style="background:var(--bg3);padding:3px 8px;font-size:10px;font-weight:700;color:${roleCol};letter-spacing:.5px;border:1px solid var(--bdr)">${role}s</td></tr>`;
+  // Rows: one per shift (weekday shifts shown on weekday columns, weekend on weekend columns)
+  const shiftGroups = [
+    { label: 'MORNING', ids: ['EC-TL','EC','EC-ESC','E-TL','E','EG-PTS','EJ'], weekend: false },
+    { label: 'AFTERNOON / LATE', ids: ['LA','EM-ESC','LE-TL','LE'], weekend: false },
+    { label: 'WEEKEND', ids: ['EE-TL','EE'], weekend: true },
+    { label: 'MANAGEMENT', ids: ['MGT'], weekend: false },
+  ];
 
-    for (const s of group) {
-      const totalHrs = calcHours(s.id, null);
-      const pct = s.fte>0?Math.round(totalHrs/s.fte*100):0;
-      const hrsCol = pct>=100?'var(--red)':pct>=85?'var(--org)':pct>=50?'var(--grn)':'var(--txt2)';
-      const shortName = s.name.includes(',') ? s.name.split(',')[0] : s.name.split(' ').pop();
+  for (const group of shiftGroups) {
+    // Group header row
+    html += `<tr><td colspan="${fn_.days.length+1}" style="background:var(--bg3);padding:2px 10px;font-size:10px;font-weight:700;color:var(--txt2);letter-spacing:.5px;border:1px solid var(--bdr)">${group.label}</td></tr>`;
+
+    for (const shiftId of group.ids) {
+      const def = SHIFT_DEFS[shiftId];
+      if (!def) continue;
 
       html += `<tr>
-        <td style="position:sticky;left:0;z-index:2;background:var(--bg2);border:1px solid var(--bdr);padding:3px 8px;white-space:nowrap;min-width:120px">
-          <span style="color:${roleCol};font-weight:600;font-size:11px">${shortName}</span>
-        </td>
-        <td style="text-align:center;border:1px solid var(--bdr);padding:2px 3px;font-size:10px;color:${hrsCol};background:var(--bg2)">${totalHrs}h</td>`;
+        <td style="position:sticky;left:0;z-index:2;background:var(--bg2);border:1px solid var(--bdr);padding:3px 8px;min-width:110px;white-space:nowrap">
+          <div style="border-left:3px solid ${def.color};padding-left:5px">
+            <div style="font-weight:700;font-size:11px;color:${def.color}">${shiftId}</div>
+            <div style="font-size:9px;color:var(--txt2)">${def.time}</div>
+          </div>
+        </td>`;
 
       for (const day of fn_.days) {
         const wknd = day.isWeekend;
-        const todayBorder = day.isToday?'border-left:2px solid var(--acc);border-right:2px solid var(--acc);':'';
-        const wkndBg = wknd?'background:rgba(210,153,34,.05);':'';
-        const leaveVal = state.leave[leaveKey(s.id,day.dayNum)]||'';
+        const applicable = group.weekend ? wknd : !wknd;
+        const todayBorder = day.isToday ? 'border-left:2px solid var(--acc);border-right:2px solid var(--acc);' : '';
+        const wkndBg = wknd ? 'background:rgba(210,153,34,.03);' : '';
 
-        let cellContent='', cellBg='';
-        if (leaveVal==='leave') {
-          cellContent=`<div style="color:var(--red);font-size:9px;font-weight:700">AL</div>`;
-          cellBg='background:rgba(248,81,73,.12);';
-        } else if (leaveVal==='red') {
-          cellContent=`<div style="color:var(--org);font-size:9px;font-weight:700">RDO</div>`;
-          cellBg='background:rgba(210,153,34,.15);';
+        if (!applicable) {
+          html += `<td style="border:1px solid var(--bdr);background:var(--bg);opacity:.25;${todayBorder}">—</td>`;
         } else {
-          const allShiftIds=[...WEEKDAY_SHIFTS,...WEEKEND_SHIFTS];
-          const myShifts=[];
-          for (const shiftId of allShiftIds) {
-            const def=SHIFT_DEFS[shiftId];
-            const key0=rKey(day.dayNum,shiftId,0);
-            if ((state.roster[key0]||[]).includes(s.id))
-              myShifts.push({shiftId,si:0,def});
-          }
-          if (myShifts.length>0) {
-            cellBg=`background:${myShifts[0].def.color}18;`;
-            cellContent=myShifts.map(sh=>
-              `<div onclick="openCellModal('${day.dayNum}','${sh.shiftId}','${sh.si}')" style="cursor:pointer;color:${sh.def.color};font-weight:700;font-size:10px;line-height:1.4;white-space:nowrap">${sh.shiftId}</div>`
-            ).join('');
+          // Get assigned staff for this shift/day
+          const key = rKey(day.dayNum, shiftId, 0);
+          const assigned = state.roster[key] || [];
+          let cellContent = '';
+
+          if (assigned.length === 0) {
+            // Show + button to assign
+            cellContent = `<div onclick="openShiftDayModal('${day.dayNum}','${shiftId}')" style="cursor:pointer;color:var(--txt3);font-size:16px;text-align:center;line-height:2;user-select:none">+</div>`;
           } else {
-            cellContent=`<div onclick="openDayStaffModal('${s.id}',${day.dayNum})" style="cursor:pointer;color:var(--txt3);font-size:11px;text-align:center">·</div>`;
+            cellContent = assigned.map(sid => {
+              const s = getStaff(sid);
+              if (!s) return '';
+              const roleCol = s.role==='CN'?'var(--cn)':s.role==='RN'?'var(--rn)':'var(--en)';
+              const firstName = s.name.split(' ')[0];
+              const leaveVal = state.leave[leaveKey(sid, day.dayNum)] || '';
+              const leaveBadge = leaveVal ? `<span style="color:var(--red);font-size:8px;margin-left:2px">${leaveVal==='leave'?'AL':'RDO'}</span>` : '';
+              return `<div style="display:flex;align-items:center;gap:2px;padding:1px 3px;margin:1px 0;border-radius:3px;background:${s.role==='CN'?'rgba(240,136,62,.15)':s.role==='RN'?'rgba(121,192,255,.12)':'rgba(86,211,100,.12)'}">
+                <span style="color:${roleCol};font-size:10px;font-weight:600;white-space:nowrap">${firstName}</span>${leaveBadge}
+                <span onclick="removeFromShift(event,'${day.dayNum}','${shiftId}','${sid}')" style="color:var(--txt3);font-size:9px;cursor:pointer;margin-left:2px;opacity:.6">×</span>
+              </div>`;
+            }).join('');
+            // Add more button
+            cellContent += `<div onclick="openShiftDayModal('${day.dayNum}','${shiftId}')" style="cursor:pointer;color:var(--txt3);font-size:10px;text-align:center;margin-top:1px;user-select:none">+ add</div>`;
           }
+
+          html += `<td style="border:1px solid var(--bdr);padding:2px 3px;${wkndBg}${todayBorder}min-width:72px;max-width:90px;vertical-align:top">${cellContent}</td>`;
         }
-        html+=`<td style="border:1px solid var(--bdr);padding:2px;${wkndBg}${cellBg}${todayBorder}min-width:36px;max-width:40px;text-align:center;vertical-align:middle">${cellContent}</td>`;
       }
-      html+='</tr>';
+      html += '</tr>';
     }
   }
 
-  html+='</tbody></table></div>';
-  document.getElementById('rosterGrid').innerHTML=html;
+  html += '</tbody></table></div>';
+  document.getElementById('rosterGrid').innerHTML = hrsHtml + html;
+
   setTimeout(()=>{
     const t=document.querySelector('[data-today="true"]');
     if(t) t.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
   },100);
+}
+
+function removeFromShift(e, dayNum, shiftId, staffId) {
+  e.stopPropagation();
+  const key = rKey(dayNum, shiftId, 0);
+  if (state.roster[key]) {
+    state.roster[key] = state.roster[key].filter(id => id !== staffId);
+    if (state.roster[key].length === 0) delete state.roster[key];
+  }
+  saveState();
+  renderRoster();
+  renderFTE();
+}
+
+function openShiftDayModal(dayNum, shiftId) {
+  const fn_ = getFortnight(state.fortnight);
+  const day = fn_.days[parseInt(dayNum)];
+  const def = SHIFT_DEFS[shiftId];
+  if (!def || !day) return;
+
+  const key = rKey(dayNum, shiftId, 0);
+  const current = state.roster[key] || [];
+
+  document.getElementById('cellModalTitle').textContent =
+    day.dayName + ' ' + day.dateStr + ' — ' + shiftId + ' (' + def.time + ')';
+
+  const fn = day.fn;
+  let body = '<div class="section-label">Assign Staff</div><div class="staff-pick">';
+
+  for (const s of allStaff()) {
+    const onLeave = isOnLeave(s.id, parseInt(dayNum));
+    const alreadyOnShift = isAssignedAnyShiftToday(s.id, parseInt(dayNum)) && !current.includes(s.id);
+    const canDo = canWorkShift(s, shiftId);
+    const selected = current.includes(s.id);
+    const roleCol = s.role==='CN'?'cn':s.role==='RN'?'rn':'en';
+    let cls = 'staff-pick-btn ' + roleCol;
+    if (selected) cls += ' selected';
+    if (onLeave || !canDo) cls += ' unavail';
+    const why = onLeave ? 'On leave' : !canDo ? 'Not eligible' : alreadyOnShift ? 'Working elsewhere' : '';
+    body += '<button class="' + cls + '" title="' + why + '" onclick="toggleShiftStaff(' + dayNum + ',\'' + shiftId + '\',\'' + s.id + '\')" ' + (onLeave||!canDo?'disabled':'') + '>';
+    body += s.name.split(' ')[0] + ' <span style="font-size:9px;opacity:.6">' + s.role + '</span>';
+    body += '</button>';
+  }
+  body += '</div>';
+
+  // Hours info
+  body += '<hr class="divider"><div class="section-label">Fortnight Hours</div>';
+  body += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-size:10px">';
+  for (const s of allStaff()) {
+    const h = calcHours(s.id, fn);
+    const t = getFteTarget(s, fn);
+    const col = h > t ? 'var(--red)' : h >= t ? 'var(--grn)' : 'var(--acc)';
+    body += '<div style="color:' + col + '">' + s.name.split(' ')[0] + ': ' + h + '/' + t + 'h</div>';
+  }
+  body += '</div>';
+
+  document.getElementById('cellModalBody').innerHTML = body;
+  document.getElementById('cellModal').classList.add('show');
+}
+
+function toggleShiftStaff(dayNum, shiftId, staffId) {
+  const key = rKey(dayNum, shiftId, 0);
+  if (!state.roster[key]) state.roster[key] = [];
+  const idx = state.roster[key].indexOf(staffId);
+  if (idx >= 0) {
+    state.roster[key].splice(idx, 1);
+  } else {
+    state.roster[key].push(staffId);
+  }
+  saveState();
+  renderRoster();
+  renderFTE();
+  openShiftDayModal(dayNum, shiftId);
 }
 
 function closeModal(id) {
