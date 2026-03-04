@@ -1015,6 +1015,11 @@ function renderRoster() {
   },100);
 }
 
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('show');
+}
+
 function openDayStaffModal(staffId, dayNum) {
   const fn_=getFortnight(state.fortnight);
   const day=fn_.days[dayNum];
@@ -1453,14 +1458,78 @@ function renderAll() {
 // ═══════════════════════════════════════════════════════════
 // INIT & EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════
+// PIN LOCK
+// ═══════════════════════════════════════════════════════════
+// PIN is stored as a SHA-256 hash. Default PIN: 1234
+// To change: run btoa(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('yourpin')))
+// then replace PIN_HASH below with the new value.
+const PIN_HASH = '295c4d1595596d3980b290fe876449463b8b87397cd13414fd6209a7ffe26eea'; // PIN: 3745
+
+let pinEntry = '';
+
+function pinPress(digit) {
+  if (pinEntry.length >= 4) return;
+  pinEntry += digit;
+  updatePinDots();
+  if (pinEntry.length === 4) setTimeout(checkPin, 150);
+}
+
+function pinClear() {
+  pinEntry = pinEntry.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pinError').textContent = '';
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('dot' + i).classList.toggle('filled', i < pinEntry.length);
+  }
+}
+
+async function checkPin() {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pinEntry);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+  if (hashHex === PIN_HASH) {
+    document.getElementById('pinOverlay').style.display = 'none';
+    sessionStorage.setItem('rosterAuth', '1');
+  } else {
+    document.getElementById('pinError').textContent = 'Incorrect PIN — try again';
+    pinEntry = '';
+    updatePinDots();
+    // Shake animation
+    const box = document.querySelector('.pin-box');
+    box.style.animation = 'none';
+    box.offsetHeight;
+    box.style.animation = 'shake .3s ease';
+  }
+}
+
+// Allow keyboard input on PIN screen
+document.addEventListener('keydown', e => {
+  if (document.getElementById('pinOverlay').style.display === 'none') return;
+  if (e.key >= '0' && e.key <= '9') pinPress(e.key);
+  if (e.key === 'Backspace') pinClear();
+});
+
+
+// ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   // Check session auth
   if (sessionStorage.getItem('rosterAuth') === '1') {
     document.getElementById('pinOverlay').style.display = 'none';
   }
 
-  loadState();
-  renderAll();
+  try {
+    loadState();
+    renderAll();
+  } catch(e) {
+    console.error('renderAll error:', e);
+    // PIN still works even if app crashes
+  }
 
   // Tabs
   document.querySelectorAll('.tab').forEach(t => {
@@ -1526,63 +1595,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-// PIN LOCK
-// ═══════════════════════════════════════════════════════════
-// PIN is stored as a SHA-256 hash. Default PIN: 1234
-// To change: run btoa(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('yourpin')))
-// then replace PIN_HASH below with the new value.
-const PIN_HASH = '295c4d1595596d3980b290fe876449463b8b87397cd13414fd6209a7ffe26eea'; // PIN: 3745
-
-let pinEntry = '';
-
-function pinPress(digit) {
-  if (pinEntry.length >= 4) return;
-  pinEntry += digit;
-  updatePinDots();
-  if (pinEntry.length === 4) setTimeout(checkPin, 150);
-}
-
-function pinClear() {
-  pinEntry = pinEntry.slice(0, -1);
-  updatePinDots();
-  document.getElementById('pinError').textContent = '';
-}
-
-function updatePinDots() {
-  for (let i = 0; i < 4; i++) {
-    document.getElementById('dot' + i).classList.toggle('filled', i < pinEntry.length);
-  }
-}
-
-async function checkPin() {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pinEntry);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-  if (hashHex === PIN_HASH) {
-    document.getElementById('pinOverlay').style.display = 'none';
-    sessionStorage.setItem('rosterAuth', '1');
-  } else {
-    document.getElementById('pinError').textContent = 'Incorrect PIN — try again';
-    pinEntry = '';
-    updatePinDots();
-    // Shake animation
-    const box = document.querySelector('.pin-box');
-    box.style.animation = 'none';
-    box.offsetHeight;
-    box.style.animation = 'shake .3s ease';
-  }
-}
-
-// Allow keyboard input on PIN screen
-document.addEventListener('keydown', e => {
-  if (document.getElementById('pinOverlay').style.display === 'none') return;
-  if (e.key >= '0' && e.key <= '9') pinPress(e.key);
-  if (e.key === 'Backspace') pinClear();
-});
 
 </script>
 </body>
