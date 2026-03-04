@@ -231,7 +231,7 @@ hr.divider { border:none; border-top:1px solid var(--bdr); margin:10px 0; }
   <div class="hdr-left">
     <div>
       <div class="logo">🏥 Robina Transfer Unit</div>
-      <div class="subtitle">Ward Roster Manager v8</div>
+      <div class="subtitle">Ward Roster Manager v10</div>
     </div>
   </div>
   <div class="hdr-btns">
@@ -879,6 +879,7 @@ Fill every possible shift slot. Be thorough. Prioritise FTE compliance above all
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4000,
+        system: 'You are a hospital roster scheduling assistant. You MUST respond with ONLY raw JSON — no markdown, no backticks, no explanation. Start your response with { and end with }.',
         messages: [{ role: 'user', content: promptText }]
       })
     });
@@ -890,10 +891,23 @@ Fill every possible shift slot. Be thorough. Prioritise FTE compliance above all
     const data = await response.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const text = data.content.map(x => x.text||'').join('');
-    const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-    const jsonMatch = clean.match(/\{[\s\S]*\}/);
-    try { return JSON.parse(jsonMatch ? jsonMatch[0] : clean); }
-    catch(e) { throw new Error('Could not parse AI response: ' + text.slice(0,300)); }
+    // Strip any markdown fencing robustly
+    let clean = text
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    // Find the outermost JSON object
+    const start = clean.indexOf('{');
+    const end = clean.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+      clean = clean.slice(start, end + 1);
+    }
+    try {
+      return JSON.parse(clean);
+    } catch(e) {
+      throw new Error('Could not parse AI response: ' + text.slice(0, 300));
+    }
   }
 
   let applied = 0, skipped = 0;
